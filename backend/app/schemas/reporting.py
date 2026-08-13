@@ -83,7 +83,8 @@ class CampagneRequest(BaseModel):
     parametres_fixes: list[ParametreIncertain] = Field(default_factory=list)
     simulation: SimulationConfig = Field(default_factory=SimulationConfig)
     sorties_suivies: list[str] = Field(
-        default_factory=lambda: ["COP", "eta_ex", "m_dot_pri", "mu"]
+        default_factory=list,
+        description="Sorties suivies. Vide = utilise SORTIES[circuit] par défaut."
     )
 
 
