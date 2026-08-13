@@ -103,6 +103,38 @@ du catalogue est utilisée (pratique pour une démonstration immédiate).
 
 ---
 
+## Production (pm2 + Traefik)
+
+En production, le backend tourne sous **pm2** (process `app-simpy-liga`, port
+`4004`) et est exposé en HTTPS via **Traefik** sur
+`https://simpy-liga.elmes-solution.site` (config Traefik :
+`/home/ubuntu/elmesacad/config/traefik/dynamic/app-simpy-liga.yml`).
+
+### Redémarrer après un `git pull`
+
+```bash
+cd /home/ubuntu/apps/app-simpy-liga
+git pull
+
+cd backend
+source .venv/bin/activate
+pip install -r requirements.txt   # seulement si requirements.txt a changé
+
+pm2 restart app-simpy-liga
+```
+
+Vérifier que ça tourne bien :
+
+```bash
+pm2 status app-simpy-liga
+pm2 logs app-simpy-liga --lines 30 --nostream
+curl -s https://simpy-liga.elmes-solution.site/api/health
+```
+
+Pas besoin de toucher à Traefik ni au firewall — seul le code applicatif change.
+
+---
+
 ## Branchement du cœur physique réel
 
 Tant que `app-machine-r718` n'est pas disponible, `physics_adapter.py` utilise
