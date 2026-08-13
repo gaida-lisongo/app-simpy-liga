@@ -112,8 +112,11 @@ Chaque card contient :
 ## Stack technique
 
 - **Frontend** : SvelteKit + Tailwind CSS + shadcn-svelte
-- **Cache / BDD** : Upstash Redis (remplace SQLite)
-- **Charts** : recharts (histos, donut, sparklines) + SVG natif (T-s, P-h)
+- **Cache / BDD** : Upstash Redis (pas de SQLite)
+- **Charts** : **Plotly.js UNIQUEMENT** (histos, donut, sparklines, T-s, P-H, P-s, Sankey)
+  - Bundle partiel : `plotly.js/lib/core` + scatter + bar + histogram + pie
+  - Thème dark global dans `src/lib/plotly.js`
+  - Axe Y logarithmique obligatoire sur P-H et P-S (R718 : 1→85 kPa = 2 décades)
 - **API** : FastAPI déployée sur VPS → https://simpy-liga.elmes-solution.site
 - **Variables d'env** : récupérer depuis `elmesacad-marketplace/.env` ou `.env.local`
 
@@ -152,15 +155,25 @@ GET  /api/dashboard          → synthèse 4 circuits
 
 ### Payload POST /api/{circuit}/run
 
+Corps optionnel. Sans corps = configuration catalogue par défaut (recommandé).
+
 ```json
-{
-  "N_iterations": 10000,
-  "seed": 42,
-  "methode": "LHS",
-  "parametres": {
-    "G": { "loi": "normale", "mu": 800, "sigma": 80 }
-  }
-}
+{ "circuit": "solaire",
+  "simulation": { "N_iterations": 10000, "seed": 42, "echantillonnage": "LHS" } }
+```
+
+### Champs clés de la réponse — utilisés par le frontend
+
+```
+resultats.statistiques       → μ, σ, IC95 par sortie  → Section 2 KPIs + Section 4A donut
+resultats.tirages            → lignes brutes MC        → Section 4B histos + Section 5 table
+resultats.etats_cycle        → points T,P,h,s,x        → Section 3 diagramme thermo
+resultats.bilan_energetique  → Q_evap/Q_gen/COP        → Section 3 bilan
+resultats.profil_tube        → T_fluide/T_abs/T_vitre  → Section 3 tube absorbeur (solaire)
+resultats.courbes_cpc        → eta_th=f(G), STR=f(Tg)  → Section 3 concentrateur (solaire)
+resultats.sankey_solaire     → flux énergétiques       → Section 3 bilan exergie (solaire)
+resultats.convergence        → N_stable                → Section 4A sous-texte donut
+parametres_incertains        → lois et bornes          → Section 6 panneau simulation
 ```
 
 ---

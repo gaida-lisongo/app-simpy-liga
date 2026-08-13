@@ -10,7 +10,7 @@ export const CIRCUITS = [
 		etats: '1 → 7 → 8 → 4',
 		composants: ['Pompe', 'Générateur', 'Tuyère primaire'],
 		icon: 'pump',
-		accent: '#06c167',
+		accent: '#818cf8',
 		kpis: ['COP', 'mu', 'm_dot_pri', 'eta_ex'],
 		segments: [
 			{ label: 'Pompe', from: '1', to: '7' },
@@ -26,7 +26,7 @@ export const CIRCUITS = [
 		etats: '1 → 2 → 3 → 4',
 		composants: ['Détendeur', 'Évaporateur (12 kW)', 'Aspiration secondaire'],
 		icon: 'snowflake',
-		accent: '#06c167',
+		accent: '#22d3ee',
 		kpis: ['COP', 'mu', 'm_dot_sec', 'eta_ex'],
 		segments: [
 			{ label: 'Détendeur', from: '1', to: '2' },
@@ -42,7 +42,7 @@ export const CIRCUITS = [
 		etats: '4 → 5 → 6 → 1',
 		composants: ['Chambre de mélange', 'Diffuseur', 'Condenseur'],
 		icon: 'merge',
-		accent: '#06c167',
+		accent: '#f59e0b',
 		kpis: ['COP', 'mu', 'Q_gen', 'eta_ex'],
 		segments: [
 			{ label: 'Chambre de mélange', from: '3', to: '4' },
@@ -58,8 +58,40 @@ export const CIRCUITS = [
 		etats: 'Externe',
 		composants: ['Concentrateur cylindro-parabolique', 'Caloporteur', "Apport au générateur"],
 		icon: 'sun',
-		accent: '#06c167',
-		kpis: ['COP', 'mu', 'Q_gen', 'eta_ex'],
+		accent: '#4ade80',
+		// KPIs corrigés — COP et mu exclus (constants pour ce circuit, σ=0)
+		kpis: ['STR', 'eta_th', 'eta_ex', 'Q_utile'],
+		kpiLabels: {
+			STR:     'Performance solaire globale',
+			eta_th:  'Rendement thermique',
+			eta_ex:  'Efficacité énergétique (2e loi)',
+			Q_utile: 'Puissance livrée au générateur'
+		},
+		kpiUnits: { STR: '—', eta_th: '—', eta_ex: '—', Q_utile: 'kW' },
+		tiragesColonnes: [
+			{ key: 'G',       label: 'Rayonnement solaire',      unite: 'W/m²' },
+			{ key: 'eta_col', label: 'Efficacité concentrateur', unite: '—'   },
+			{ key: 'T_0',     label: 'Température ambiante',     unite: '°C'  },
+			{ key: 'A_col',   label: 'Surface captante',         unite: 'm²'  },
+			{ key: 'Q_utile', label: 'Puissance au générateur',  unite: 'kW'  },
+			{ key: 'eta_th',  label: 'Rendement thermique',      unite: '—'   },
+			{ key: 'STR',     label: 'Performance globale',      unite: '—'   }
+		],
+		segments: []
+	},
+		kpiUnits: {
+			STR: '—', eta_th: '—', eta_ex: '—', Q_utile: 'kW'
+		},
+		// Colonnes table données brutes
+		tiragesColonnes: [
+			{ key: 'G',       label: 'Rayonnement solaire',       unite: 'W/m²' },
+			{ key: 'eta_col', label: 'Efficacité concentrateur',  unite: '—'    },
+			{ key: 'T_0',     label: 'Température ambiante',      unite: '°C'   },
+			{ key: 'A_col',   label: 'Surface captante',          unite: 'm²'   },
+			{ key: 'Q_utile', label: 'Puissance au générateur',   unite: 'kW'   },
+			{ key: 'eta_th',  label: 'Rendement thermique',       unite: '—'    },
+			{ key: 'STR',     label: 'Performance globale',       unite: '—'    }
+		],
 		segments: []
 	}
 ];
