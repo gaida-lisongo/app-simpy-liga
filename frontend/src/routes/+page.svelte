@@ -2,6 +2,7 @@
 	import { getDashboard } from '$lib/api.js';
 	import KpiCard from '$lib/components/KpiCard.svelte';
 	import StatCard from '$lib/components/StatCard.svelte';
+	import BilanEnergetique from '$lib/components/BilanEnergetique.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import { CIRCUITS, apiCircuitOf } from '$lib/constants.js';
@@ -9,6 +10,7 @@
 	let loading = $state(true);
 	let error = $state('');
 	let dash = $state(/** @type {any} */ (null));
+	let bilans = $state(/** @type {Record<string, { bilan: any, statistiques: any }>} */ ({}));
 
 	/** @param {boolean} [force] Ignore le cache Redis et relance les campagnes de synthèse. */
 	async function load(force = false) {
@@ -19,19 +21,38 @@
 				const cached = await fetch('/db/dashboard').then((r) => r.json());
 				if (cached) {
 					dash = cached;
-					return;
 				}
 			}
-			dash = await getDashboard();
-			fetch('/db/dashboard', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(dash)
-			}).catch(() => {});
+			if (!dash || force) {
+				dash = await getDashboard();
+				fetch('/db/dashboard', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(dash)
+				}).catch(() => {});
+			}
+			// Bilan énergétique par circuit — depuis les dernières campagnes persistées (Redis).
+			loadBilans();
 		} catch (/** @type {any} */ e) {
 			error = e?.message ?? 'Erreur de chargement du dashboard.';
 		} finally {
 			loading = false;
+		}
+	}
+
+	async function loadBilans() {
+		try {
+			const data = await fetch('/db/campagnes').then((r) => r.json());
+			const out = {};
+			for (const slug of Object.keys(data || {})) {
+				const r = data[slug];
+				if (r?.resultats) {
+					out[slug] = { bilan: r.resultats.bilan_energetique, statistiques: r.resultats.statistiques };
+				}
+			}
+			bilans = out;
+		} catch {
+			// Bilan indisponible (vide) — non bloquant, le reste du dashboard s'affiche.
 		}
 	}
 
@@ -106,6 +127,35 @@
 			tone={rejetMax && rejetMax > 1 ? 'warning' : 'good'}
 		/>
 		<KpiCard label="Cible Q_evap" value={`${dash.cible_kW} kW`} sub="Imposée — dimensionnement inverse" tone="accent" />
+	</section>
+
+	<section class="mb-8">
+		<h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+			Bilan énergétique — machine
+		</h2>
+		<div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+			{#each CIRCUITS as circuit (circuit.slug)}
+				{@const b = bilans[apiCircuitOf(circuit)]}
+				<div
+					class="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-5"
+					style="--accent: {circuit.accent}; --accent-soft: {circuit.accent}22;"
+				>
+					<div class="mb-3 flex items-center gap-2">
+						<Badge tone="accent">{circuit.id}</Badge>
+						<a href="/{circuit.slug}" class="text-sm font-medium text-[var(--text-primary)] hover:underline">
+							{circuit.titre}
+						</a>
+					</div>
+					{#if b && b.bilan}
+						<BilanEnergetique bilan={b.bilan} statistiques={b.statistiques} />
+					{:else}
+						<p class="text-sm text-[var(--text-muted)]">
+							Aucun bilan — lancez une campagne sur ce circuit pour alimenter le bilan global.
+						</p>
+					{/if}
+				</div>
+			{/each}
+		</div>
 	</section>
 
 	<section>

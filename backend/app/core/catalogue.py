@@ -90,10 +90,11 @@ PARAMETRES: dict[Circuit, list[ParametreIncertain]] = {
         _uni("phi_sections", "Phi", "-", 4, 12),
     ],
     Circuit.solaire: [
-        _nor("G", "G", "W/m2", 800, 100),
-        _tri("eta_col", "eta_col", "-", 0.55, 0.68, 0.78),
-        _nor("T_0", "T_0", "degC", 25, 4),
-        _uni("A_col", "A_col", "m2", 20, 60),
+        _nor("G",       "G",       "W/m2", 800, 80,   source="Ghodbane2015"),
+        _tri("eta_col", "eta_col", "-",  0.55, 0.68, 0.78, source="ICT3_Tab2"),
+        _nor("T_0",     "T_0",     "degC",  25,  3,  source="contexte_RDC"),
+        _uni("A_col",   "A_col",   "m2",    70, 100,  source="memoire_eq7.14"),
+        _uni("phi_s",   "phi_s",   "-",   0.05, 0.15, source="Al-akayshee2026"),
     ],
 }
 

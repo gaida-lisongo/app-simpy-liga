@@ -11,7 +11,7 @@
 			{href}
 			class="rounded-full border px-3 py-1.5 text-xs font-medium transition-colors"
 			style={active
-				? `background:${c.accent}22; border-color:${c.accent}66; color:${c.accent}`
+				? 'background:rgba(250,250,250,0.10); border-color:rgba(250,250,250,0.40); color:var(--text-primary)'
 				: 'background:transparent; border-color:transparent; color:var(--text-muted)'}
 		>
 			{c.id}

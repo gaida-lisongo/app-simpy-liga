@@ -37,6 +37,27 @@ export function getCampagne(id) {
 	return redis.get(kCampagne(id));
 }
 
+/**
+ * Consomme (RPOP) les événements en attente de la file d'une campagne (FIFO).
+ * producteur = backend LPUSH ; consommateur = ici RPOP. Renvoie un tableau
+ * d'événements parsés (vide si rien en attente).
+ * @param {string} id @param {number} [limit] nb max d'événements drainés par appel.
+ */
+export async function popEvents(id, limit = 64) {
+	const key = `simpy:campagne:${id}:events`;
+	const out = [];
+	for (let i = 0; i < limit; i++) {
+		const v = await redis.rpop(key);
+		if (v === null || v === undefined) break;
+		try {
+			out.push(typeof v === 'string' ? JSON.parse(v) : v);
+		} catch {
+			// valeur non-JSON : on l'ignore (file corrompue — ne doit pas arriver)
+		}
+	}
+	return out;
+}
+
 /** @param {string} circuit */
 export function getHistorique(circuit) {
 	return redis.lrange(kHistory(circuit), 0, HISTORY_LIMIT - 1);

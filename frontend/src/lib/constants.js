@@ -10,7 +10,7 @@ export const CIRCUITS = [
 		etats: '1 → 7 → 8 → 4',
 		composants: ['Pompe', 'Générateur', 'Tuyère primaire'],
 		icon: 'pump',
-		accent: '#818cf8',
+		accent: '#06c167',
 		kpis: ['COP', 'mu', 'm_dot_pri', 'eta_ex'],
 		segments: [
 			{ label: 'Pompe', from: '1', to: '7' },
@@ -26,7 +26,7 @@ export const CIRCUITS = [
 		etats: '1 → 2 → 3 → 4',
 		composants: ['Détendeur', 'Évaporateur (12 kW)', 'Aspiration secondaire'],
 		icon: 'snowflake',
-		accent: '#22d3ee',
+		accent: '#06c167',
 		kpis: ['COP', 'mu', 'm_dot_sec', 'eta_ex'],
 		segments: [
 			{ label: 'Détendeur', from: '1', to: '2' },
@@ -42,7 +42,7 @@ export const CIRCUITS = [
 		etats: '4 → 5 → 6 → 1',
 		composants: ['Chambre de mélange', 'Diffuseur', 'Condenseur'],
 		icon: 'merge',
-		accent: '#f59e0b',
+		accent: '#06c167',
 		kpis: ['COP', 'mu', 'Q_gen', 'eta_ex'],
 		segments: [
 			{ label: 'Chambre de mélange', from: '3', to: '4' },
@@ -58,7 +58,7 @@ export const CIRCUITS = [
 		etats: 'Externe',
 		composants: ['Concentrateur cylindro-parabolique', 'Caloporteur', "Apport au générateur"],
 		icon: 'sun',
-		accent: '#4ade80',
+		accent: '#06c167',
 		kpis: ['COP', 'mu', 'Q_gen', 'eta_ex'],
 		segments: []
 	}

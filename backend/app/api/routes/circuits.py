@@ -23,6 +23,7 @@ from app.schemas.reporting import (
 )
 from app.core.catalogue import get_default_config, META, PERIMETRES, PARAMETRES
 from app.engine.monte_carlo import run_campaign
+from app.engine import runner
 from app.adapters.physics_adapter import core_is_real
 
 router = APIRouter(prefix="/api", tags=["circuits"])
@@ -32,7 +33,7 @@ SORTIES: dict[Circuit, list[str]] = {
     Circuit.moteur:       ["COP", "mu", "m_dot_pri", "Q_gen",  "eta_ex"],
     Circuit.frigorifique: ["COP", "mu", "m_dot_pri", "m_dot_sec", "eta_ex"],
     Circuit.couplage:     ["COP", "mu", "Q_gen",     "eta_ex"],
-    Circuit.solaire:      ["COP", "mu", "Q_gen",     "eta_ex"],
+    Circuit.solaire:      ["Q_utile", "eta_th", "STR", "m_dot_pri", "eta_ex"],
 }
 
 _CIBLE_DEFAUT = Cible(grandeur="Q_e", valeur=12.0, unite="kW", tol_pct=5.0)
@@ -61,11 +62,16 @@ def get_config(circuit: Circuit) -> ReportingResponse:
     )
 
 
-@router.post("/{circuit}/run", response_model=ReportingResponse)
-def run(circuit: Circuit, req: CampagneRequest | None = None) -> ReportingResponse:
+@router.post("/{circuit}/run")
+def run(circuit: Circuit, req: CampagneRequest | None = None) -> dict:
     """
-    Lance une campagne Monte Carlo (dimensionnement inverse).
-    Corps vide = configuration catalogue par défaut.
+    Lance une campagne Monte Carlo asynchrone (dimensionnement inverse).
+
+    Retourne immédiatement un ack {campagne_id, statut:"en_cours", channel}.
+    La campagne s'exécute en arrière-plan et publie sa progression + son résultat
+    final sur la file Redis `channel` (LPUSH/RPOP), écoutée par l'UI via SSE.
+
+    Corps vide = configuration catalogue par défaut. N_iterations plafonné à 10 000.
     """
     if req is None:
         params  = PARAMETRES[circuit]
@@ -79,18 +85,7 @@ def run(circuit: Circuit, req: CampagneRequest | None = None) -> ReportingRespon
         sim.cible = sim.cible or _CIBLE_DEFAUT   # garantir la cible
         sorties = req.sorties_suivies or SORTIES[circuit]
 
-    resultats, _ = run_campaign(params, sim, sorties)
-
-    return ReportingResponse(
-        article=MetaArticle(circuit=circuit, **META[circuit]),
-        perimetre=PERIMETRES[circuit],
-        simulation=sim,
-        parametres_incertains=params,
-        resultats=resultats,
-        campagne_id=_now(),
-        statut="ok",
-        message=f"Inv. {sim.N_iterations} tirages LHS — cible {sim.cible.valeur} kW.",
-    )
+    return runner.start_run(circuit, params, sim, sorties)
 
 
 @router.get("/dashboard")

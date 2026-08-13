@@ -7,6 +7,7 @@
 	 *   seed: number,
 	 *   methode: string,
 	 *   running: boolean,
+	 *   progress?: number,
 	 *   error?: string,
 	 *   onLancer: () => void
 	 * }}
@@ -16,6 +17,7 @@
 		seed = $bindable(42),
 		methode = $bindable('LHS'),
 		running,
+		progress = 0,
 		error = '',
 		onLancer
 	} = $props();
@@ -48,19 +50,33 @@
 			</select>
 		</label>
 
-		<Button onclick={onLancer} disabled={running} type="button">
-			{#if running}
-				<span
-					class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white"
-				></span>
-				Simulation en cours…
-			{:else}
-				Lancer la simulation
-			{/if}
-		</Button>
-
-		{#if error}
-			<p class="text-sm text-[var(--critical)]">{error}</p>
+<Button onclick={onLancer} disabled={running} type="button">
+		{#if running}
+			<span
+				class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white"
+			></span>
+			Simulation en cours…
+		{:else}
+			Lancer la simulation
 		{/if}
+	</Button>
+
+	{#if running}
+		<div class="flex items-center gap-2">
+			<div class="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--border)]">
+				<div
+					class="h-full rounded-full transition-all duration-300"
+					style="width:{Math.max(2, progress)}%; background:var(--accent)"
+				></div>
+			</div>
+			<span class="tabular text-xs text-[var(--text-muted)]">{progress.toFixed(0)}%</span>
+		</div>
+	{:else if progress === 100}
+		<p class="text-xs text-[var(--text-muted)]">Campagne terminée — données disponibles.</p>
+	{/if}
+
+	{#if error}
+		<p class="text-sm text-[var(--critical)]">{error}</p>
+	{/if}
 	</div>
 </div>

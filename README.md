@@ -2,8 +2,8 @@
 
 Application web de **validation stochastique** (Monte Carlo) d'une machine
 frigorifique à éjecteur au **R718 (eau)**, 12 kW. Backend **FastAPI** exposant
-un reporting JSON par circuit ; frontend **SvelteKit + Tailwind + shadcn**
-(à venir).
+un reporting JSON par circuit ; frontend **SvelteKit + Tailwind**, dashboard
+sombre avec 5 pages (`/`, `/moteur`, `/frigorifique`, `/couplage`, `/solar`).
 
 Ce dépôt est **distinct** de `app-machine-r718` (le cœur physique déterministe),
 qu'il n'importe que via un unique adaptateur, sans jamais le dupliquer.
@@ -14,33 +14,38 @@ qu'il n'importe que via un unique adaptateur, sans jamais le dupliquer.
 
 ```
 app-simpy-liga/
-└── backend/
-    ├── app/
-    │   ├── main.py                  → application FastAPI (CORS + routes)
-    │   ├── api/routes/circuits.py   → endpoints par circuit + dashboard
-    │   ├── schemas/reporting.py     → format JSON commun (Pydantic)
-    │   ├── core/catalogue.py        → 4 circuits : méta, périmètre, params défaut
-    │   ├── engine/
-    │   │   ├── distributions.py     → lois U / N / Triang → quantiles (LHS)
-    │   │   └── monte_carlo.py       → échantillonnage LHS + propagation + stats
-    │   └── adapters/physics_adapter.py → pont UNIQUE vers app-machine-r718
-    │                                     (mock physique tant que le cœur réel
-    │                                      n'est pas installé)
-    ├── config/                      → fichiers JSON de campagnes (guide)
-    ├── campaigns/                   → sorties horodatées (csv, png, json)
-    ├── tests/test_api.py
-    └── requirements.txt
+├── backend/                     ← FastAPI, port 4004
+│   ├── app/
+│   │   ├── main.py               → application FastAPI (CORS + routes)
+│   │   ├── api/routes/circuits.py→ endpoints par circuit + dashboard
+│   │   ├── schemas/reporting.py  → format JSON commun (Pydantic)
+│   │   ├── core/catalogue.py     → 4 circuits : méta, périmètre, params défaut
+│   │   ├── engine/
+│   │   │   ├── distributions.py  → lois U / N / Triang → quantiles (LHS)
+│   │   │   └── monte_carlo.py    → échantillonnage LHS + propagation + stats
+│   │   ├── physics/               → cœur MVC + CoolProp (7 modules, transposé
+│   │   │                            depuis app-machine-r718, jamais modifié)
+│   │   │   ├── core/               ThermoState + PropsService
+│   │   │   └── modules/            pompe, générateur, éjecteur V2, condenseur,
+│   │   │                           détendeur, évaporateur, système
+│   │   └── adapters/physics_adapter.py → pont UNIQUE vers SystemCycleModel
+│   ├── tests/test_api.py
+│   └── requirements.txt
+└── frontend/                    ← SvelteKit + Tailwind, port 3000
+    └── src/routes/               /, /moteur, /frigorifique, /couplage, /solar
 ```
 
-Les quatre circuits correspondent aux quatre articles :
+Les quatre circuits correspondent aux quatre articles. Dimensionnement
+**inverse uniquement** : Q_evap = 12 kW est imposée pour les quatre circuits,
+le solveur calcule m_dot_p pour l'atteindre.
 
-| Circuit | Article | Pages frontend | Mode |
-|---|---|---|---|
-| moteur | A1 | `/moteur` | direct |
-| frigorifique | A2 | `/frigorifique` | inverse (cible 12 kW) |
-| couplage | A3 | `/couplage` | direct |
-| solaire | A4 | `/solar` | direct |
-| (agrégat) | — | `/` (dashboard) | — |
+| Circuit | Article | Pages frontend |
+|---|---|---|
+| moteur | A1 | `/moteur` |
+| frigorifique | A2 | `/frigorifique` |
+| couplage | A3 | `/couplage` |
+| solaire | A4 | `/solar` |
+| (agrégat) | — | `/` (dashboard) |
 
 ---
 
@@ -56,6 +61,24 @@ uvicorn app.main:app --reload --port 8000
 
 - API : http://localhost:8000
 - Documentation interactive (Swagger) : http://localhost:8000/docs
+
+## Installation & lancement (frontend)
+
+```bash
+cd frontend
+npm install
+npm run dev            # http://localhost:5173, proxy /api -> http://localhost:4004
+```
+
+Le proxy dev est configurable via `API_PROXY_TARGET` (voir `vite.config.js`).
+Toutes les pages appellent l'API en fetch natif sur des chemins relatifs
+(`/api/...`) — aucune URL absolue n'est codée en dur, ce qui fonctionne à la
+fois en dev (proxy Vite) et en prod (Traefik).
+
+```bash
+npm run build           # adapter-node -> dossier build/
+node build               # sert le frontend sur le port 3000 (PORT env pour changer)
+```
 
 ### Tests
 
@@ -80,35 +103,49 @@ pytest -q
 Le corps de `POST /run` est optionnel : sans corps, la configuration par défaut
 du catalogue est utilisée (pratique pour une démonstration immédiate).
 
-### Exemple de réponse (`POST /api/moteur/run`, extrait)
+### Exemple de réponse (`POST /api/moteur/run`, extrait — valeurs réelles CoolProp, N=500)
 
 ```json
 {
   "article": { "id": "A1", "titre": "Circuit Moteur (branche chaude)", "circuit": "moteur" },
   "perimetre": { "composants": ["pompe","generateur","tuyere_primaire"],
                  "etats": ["1","7","8","4"] },
-  "simulation": { "echantillonnage": "LHS", "N_iterations": 10000, "seed": 42, "mode": "direct" },
+  "simulation": { "echantillonnage": "LHS", "N_iterations": 500, "seed": 42,
+                   "cible": { "grandeur": "Q_e", "valeur": 12.0, "unite": "kW", "tol_pct": 5.0 } },
   "resultats": {
     "statistiques": {
-      "COP": { "moyenne": 0.141, "ecart_type": 0.026, "IC95": [0.094, 0.193] },
-      "mu":  { "moyenne": 0.326, "IC95": [0.263, 0.389] }
+      "COP":       { "moyenne": 1.039, "ecart_type": 0.064, "IC95": [0.913, 1.153] },
+      "mu":        { "moyenne": 1.106, "ecart_type": 0.072, "IC95": [0.964, 1.236] },
+      "m_dot_pri": { "moyenne": 0.00460, "ecart_type": 0.00031, "IC95": [0.00410, 0.00525] },
+      "eta_ex":    { "moyenne": 0.615, "ecart_type": 0.015, "IC95": [0.588, 0.645] }
     },
-    "convergence": { "N_stable": 573, "stabilise": true },
+    "convergence": { "N_stable": 50, "stabilise": true },
     "taux_rejet_non_physique_pct": 0.0
   },
-  "campagne_id": "camp_20260812T235010Z",
+  "campagne_id": "camp_20260813T012348Z",
   "statut": "ok"
 }
 ```
+
+> Dimensionnement **inverse** : Q_evap = 12 kW est la cible fixée, `m_dot_pri`
+> est calculé par le solveur pour l'atteindre — c'est la grandeur distribuée
+> phare de la thèse, pas Q_evap qui est fixée par construction.
 
 ---
 
 ## Production (pm2 + Traefik)
 
-En production, le backend tourne sous **pm2** (process `app-simpy-liga`, port
-`4004`) et est exposé en HTTPS via **Traefik** sur
-`https://simpy-liga.elmes-solution.site` (config Traefik :
-`/home/ubuntu/elmesacad/config/traefik/dynamic/app-simpy-liga.yml`).
+Deux process **pm2** tournent en parallèle :
+
+| Process pm2 | Dossier | Port interne |
+|---|---|---|
+| `app-simpy-liga` | `backend/` (uvicorn) | `4004` |
+| `app-simpy-liga-front` | `frontend/` (`node build`, adapter-node) | `3000` |
+
+**Traefik** (`/home/ubuntu/elmesacad/config/traefik/dynamic/app-simpy-liga.yml`)
+route `https://simpy-liga.elmes-solution.site` en deux routeurs sur le même
+host : `/api*`, `/docs`, `/redoc`, `/openapi.json` → `4004` (priorité haute) ;
+tout le reste (`/*`) → `3000` (le frontend SvelteKit).
 
 ### Redémarrer après un `git pull`
 
@@ -116,41 +153,55 @@ En production, le backend tourne sous **pm2** (process `app-simpy-liga`, port
 cd /home/ubuntu/apps/app-simpy-liga
 git pull
 
+# backend
 cd backend
 source .venv/bin/activate
 pip install -r requirements.txt   # seulement si requirements.txt a changé
-
 pm2 restart app-simpy-liga
+
+# frontend
+cd ../frontend
+npm install                       # seulement si package.json a changé
+npm run build
+pm2 restart app-simpy-liga-front
 ```
 
 Vérifier que ça tourne bien :
 
 ```bash
-pm2 status app-simpy-liga
+pm2 status
 pm2 logs app-simpy-liga --lines 30 --nostream
+pm2 logs app-simpy-liga-front --lines 30 --nostream
 curl -s https://simpy-liga.elmes-solution.site/api/health
+curl -s -o /dev/null -w "%{http_code}\n" https://simpy-liga.elmes-solution.site/
 ```
 
-Pas besoin de toucher à Traefik ni au firewall — seul le code applicatif change.
+Pas besoin de retoucher Traefik ni le firewall pour un déploiement courant —
+seul le code applicatif change (le fichier Traefik ne change que si le
+schéma de routage lui-même évolue).
 
 ---
 
 ## Branchement du cœur physique réel
 
-Tant que `app-machine-r718` n'est pas disponible, `physics_adapter.py` utilise
-un **mock physiquement cohérent** (tendances correctes du COP, de μ, des
-débits). Le basculement est automatique : dès que
-`from app_r718.modules.system_dashboard.model import SystemCycleModel`
-réussit, `core_is_real()` renvoie `True`. Il reste alors à compléter l'appel
-réel dans `run_cycle()` (une zone est balisée dans le fichier).
+Le cœur physique réel est **branché et actif** : `GET /api/health` renvoie
+`"coeur_physique_reel": true`. `physics_adapter.py` est le pont **unique**
+vers `app/physics/modules/system/model.py` (`SystemCycleModel`), une
+transposition MVC + CoolProp des 7 modules du cycle (pompe, générateur,
+éjecteur V2, condenseur, détendeur, évaporateur, système) — dérivée de
+`app-machine-r718` (jamais modifié ni importé directement ailleurs dans le
+code). Aucun mock n'est utilisé en production.
+
+Le dimensionnement est **inverse uniquement** : Q_evap = 12 kW est imposée,
+`run_cycle()` retourne les grandeurs distribuées `m_dot_p`, `m_dot_s`, `COP`,
+`mu`, `eta_ex` calculées par le solveur pour atteindre cette cible.
 
 ---
 
 ## Feuille de route
 
 - [x] Backend FastAPI : schémas, catalogue, moteur Monte Carlo, routes, tests
+- [x] Branchement du cœur physique réel (CoolProp, MVC, dimensionnement inverse 12 kW)
+- [x] Frontend SvelteKit + Tailwind (pages /, /moteur, /frigorifique, /couplage, /solar) — pm2 + Traefik en place
 - [ ] Analyse de sensibilité Sobol (SALib) + tests White/Shapiro/Student
 - [ ] Export CSV/PNG des campagnes (`campaigns/`)
-- [ ] Branchement du cœur physique réel `app-machine-r718`
-- [ ] Frontend SvelteKit + Tailwind + shadcn (pages /, /moteur, /frigorifique, /solar, /couplage)
-```

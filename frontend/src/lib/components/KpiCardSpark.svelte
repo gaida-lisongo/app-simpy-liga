@@ -1,9 +1,10 @@
 <script>
+	import PlotlyChart from '$lib/components/ui/PlotlyChart.svelte';
 	import Tooltip from '$lib/components/ui/Tooltip.svelte';
 
 	/**
 	 * Sparkline = moyenne cumulée du tirage (convergence réelle sur la campagne),
-	 * calculée à partir de resultats.tirages — pas de donnée fabriquée.
+	 * calculée à partir de resultats.tirages — pas de donnée fabriquée. Rendu Plotly.
 	 * @type {{
 	 *   label: string,
 	 *   tooltip?: string,
@@ -20,17 +21,34 @@
 		return v === undefined || v === null ? '—' : Number(v).toFixed(decimals);
 	}
 
-	const W = 160;
-	const H = 40;
-
-	let path = $derived.by(() => {
-		if (!serie?.length) return null;
+	let cum = $derived.by(() => {
+		if (!serie?.length) return [];
 		let acc = 0;
-		const cum = serie.map((v, i) => (acc += v) / (i + 1));
-		const min = Math.min(...cum), max = Math.max(...cum);
-		const sx = (/** @type {number} */ i) => (i / (cum.length - 1 || 1)) * W;
-		const sy = (/** @type {number} */ v) => H - 2 - ((v - min) / (max - min || 1)) * (H - 4);
-		return cum.map((v, i) => `${i === 0 ? 'M' : 'L'}${sx(i).toFixed(1)},${sy(v).toFixed(1)}`).join(' ');
+		return serie.map((v, i) => (acc += v) / (i + 1));
+	});
+
+	let plotData = $derived(
+		cum.length
+			? [
+					{
+						x: cum.map((_, i) => i + 1),
+						y: cum,
+						type: 'scatter',
+						mode: 'lines',
+						fill: 'tozeroy',
+						line: { color: '#06c167', width: 1.6 },
+						fillcolor: 'rgba(6,193,103,0.14)',
+						showlegend: false
+					}
+				]
+			: []
+	);
+
+	let sparkLayout = $derived({
+		margin: { t: 0, b: 0, l: 0, r: 0 },
+		xaxis: { visible: false },
+		yaxis: { visible: false },
+		showlegend: false
 	});
 
 	let cv = $derived(
@@ -39,7 +57,7 @@
 </script>
 
 <div class="relative overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-4">
-	<div class="absolute inset-x-0 top-0 h-[3px]" style="background:{accent}"></div>
+	<div class="absolute inset-x-0 top-0 h-[3px] bg-[var(--accent)]"></div>
 
 	<div class="flex items-center gap-1.5">
 		<span class="text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">{label}</span>
@@ -53,13 +71,13 @@
 	{#if stat}
 		<p class="tabular mt-1.5 text-2xl font-semibold text-[var(--text-primary)]">{fmt(stat.moyenne)}</p>
 		{#if cv !== null}
-			<p class="tabular text-xs" style="color:{accent}">CV {cv.toFixed(1)}%</p>
+			<p class="tabular text-xs text-[var(--text-secondary)]">CV {cv.toFixed(1)}%</p>
 		{/if}
 
-		{#if path}
-			<svg viewBox="0 0 {W} {H}" class="mt-2 w-full" preserveAspectRatio="none" role="img" aria-label="Convergence de {label} sur la campagne">
-				<path d={path} fill="none" stroke={accent} stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-			</svg>
+		{#if cum.length}
+			<div style="height:48px" class="mt-2">
+				<PlotlyChart data={plotData} layout={sparkLayout} />
+			</div>
 		{/if}
 
 		{#if stat.IC95}

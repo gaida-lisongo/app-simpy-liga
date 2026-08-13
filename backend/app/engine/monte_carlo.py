@@ -8,12 +8,15 @@ Auteur : Projet Thèse R718 — SimpyLIGA
 """
 from __future__ import annotations
 
+from typing import Callable, Optional
+
 import numpy as np
 from scipy.stats import qmc
 
 from app.schemas.reporting import (
     ParametreIncertain, SimulationConfig,
     Resultats, StatSortie, Convergence, EtatCycle, BilanEnergetique,
+    ProfilTube, CourbesCPC, SankeySolaire,
 )
 from app.engine.distributions import build_ppf, nominal_value
 from app.adapters.physics_adapter import run_cycle
@@ -23,6 +26,7 @@ def run_campaign(
     params: list[ParametreIncertain],
     config: SimulationConfig,
     sorties_suivies: list[str],
+    progress_cb: Optional[Callable[[int, int], None]] = None,
 ) -> tuple[Resultats, dict]:
     """
     Campagne Monte Carlo — dimensionnement inverse stochastique.
@@ -58,6 +62,7 @@ def run_campaign(
     collected: dict[str, list[float]] = {s: [] for s in sorties_suivies}
     tirages_bruts: list[dict[str, float]] = []
     n_rejets = 0
+    step = max(1, n // 200)  # cadence de progression (~200 notifications max)
 
     for i in range(n):
         tirage = dict(fixes)
@@ -68,14 +73,19 @@ def run_campaign(
 
         if not out.get("physically_valid", False):
             n_rejets += 1
-            continue
+        else:
+            ligne: dict[str, float] = {nom: tirage[nom] for nom in noms}
+            for s in sorties_suivies:
+                if s in out and isinstance(out[s], (int, float)):
+                    collected[s].append(float(out[s]))
+                    ligne[s] = float(out[s])
+            tirages_bruts.append(ligne)
 
-        ligne: dict[str, float] = {nom: tirage[nom] for nom in noms}
-        for s in sorties_suivies:
-            if s in out and isinstance(out[s], (int, float)):
-                collected[s].append(float(out[s]))
-                ligne[s] = float(out[s])
-        tirages_bruts.append(ligne)
+        if progress_cb is not None and (i + 1) % step == 0:
+            progress_cb(i + 1, n)
+
+    if progress_cb is not None:
+        progress_cb(n, n)
 
     # Cycle de référence (paramètres à leur valeur nominale) — pour les diagrammes
     # thermodynamiques et le bilan énergétique, plutôt qu'un tirage aléatoire quelconque.
@@ -95,6 +105,24 @@ def run_campaign(
             Q_cond=ref.get("Q_cond"), W_pompe=ref.get("W_pompe"),
             COP=ref.get("COP"),
         )
+
+    # Enrichissement spécifique circuit solaire (profil_tube, courbes_cpc, sankey)
+    _solar_keys = {"G", "eta_col", "A_col"}
+    if any(p.nom in _solar_keys for p in params):
+        from app.adapters.physics_adapter import (
+            compute_profil_tube, compute_courbes_cpc, compute_sankey_solaire,
+        )
+        _nom = {p.nom: nominal_value(p) for p in params}
+        _Q_sol   = _nom.get("G", 800) * _nom.get("A_col", 85) / 1000
+        _Q_opt   = _Q_sol * _nom.get("eta_col", 0.68)
+        _Q_utile = _Q_opt * (1 - _nom.get("phi_s", 0.10))
+
+        resultats.profil_tube = ProfilTube(**compute_profil_tube(_Q_utile))
+        resultats.courbes_cpc = CourbesCPC(**compute_courbes_cpc(
+            eta_col_nom=_nom.get("eta_col", 0.68),
+            phi_s_nom=_nom.get("phi_s", 0.10)))
+        resultats.sankey_solaire = SankeySolaire(
+            **compute_sankey_solaire(_Q_sol, _Q_opt, _Q_utile))
 
     raw: dict[str, np.ndarray] = {}
 

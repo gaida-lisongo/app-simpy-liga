@@ -140,6 +140,40 @@ class BilanEnergetique(BaseModel):
     COP: Optional[float] = None
 
 
+class ProfilTube(BaseModel):
+    """Profil axial du tube absorbeur — graphique phare du circuit solaire."""
+    x_m: list[float] = Field(default_factory=list,
+        description="Positions le long du tube [m]")
+    T_fluide: list[float] = Field(default_factory=list,
+        description="Température fluide R718 [°C]")
+    T_absorbeur: list[float] = Field(default_factory=list,
+        description="Température paroi tube absorbeur [°C]")
+    T_vitre: list[float] = Field(default_factory=list,
+        description="Température enveloppe vitre [°C]")
+    zones: list[str] = Field(default_factory=list,
+        description="Zone thermique : préchauffage | vaporisation | surchauffe")
+
+
+class CourbesCPC(BaseModel):
+    """Courbes de performance du concentrateur pour visualisation."""
+    G_range: list[float] = Field(default_factory=list,
+        description="Plage d'irradiance [W/m²]")
+    eta_th_vs_G: list[float] = Field(default_factory=list,
+        description="Rendement thermique en fonction de G [-]")
+    T_gen_range: list[float] = Field(default_factory=list,
+        description="Plage de température génération [°C]")
+    STR_vs_Tgen: list[float] = Field(default_factory=list,
+        description="STR en fonction de T_gen [-]")
+
+
+class SankeySolaire(BaseModel):
+    """Données Sankey énergétique/exergétique du circuit solaire."""
+    labels: list[str] = Field(default_factory=list)
+    values_kW: list[float] = Field(default_factory=list)
+    source: list[int] = Field(default_factory=list)
+    target: list[int] = Field(default_factory=list)
+
+
 class Resultats(BaseModel):
     """Bloc de résultats statistiques d'une campagne."""
     statistiques: dict[str, StatSortie] = Field(default_factory=dict)
@@ -158,6 +192,12 @@ class Resultats(BaseModel):
         default_factory=list,
         description="Tirages Monte Carlo bruts (paramètres variables + sorties suivies), un par ligne.",
     )
+    profil_tube: Optional[ProfilTube] = Field(
+        None, description="Profil axial T_fluide/T_abs/T_vitre — circuit solaire uniquement")
+    courbes_cpc: Optional[CourbesCPC] = Field(
+        None, description="η_th=f(G) et STR=f(T_gen) — circuit solaire uniquement")
+    sankey_solaire: Optional[SankeySolaire] = Field(
+        None, description="Flux énergétiques Sankey — circuit solaire uniquement")
 
 
 # --------------------------------------------------------------------------- #

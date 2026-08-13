@@ -1,16 +1,18 @@
 import { CIRCUITS } from '$lib/constants.js';
-import { runCampaign } from '$lib/api.js';
+import { startRun } from '$lib/api.js';
 
-/** @typedef {{ result: any, loading: boolean, error: string, hydrated: boolean }} CircuitState */
+/** @typedef {{ result: any, loading: boolean, error: string, progress: number, hydrated: boolean }} CircuitState */
 
 /** @type {Record<string, CircuitState>} */
 const state = $state(
-	Object.fromEntries(CIRCUITS.map((c) => [c.slug, { result: null, loading: false, error: '', hydrated: false }]))
+	Object.fromEntries(
+		CIRCUITS.map((c) => [c.slug, { result: null, loading: false, error: '', progress: 0, hydrated: false }])
+	)
 );
 
 let hydratePromise = /** @type {Promise<void> | null} */ (null);
 
-// Hydrate le store depuis la SQLite locale (dernière campagne par circuit) au premier montage.
+// Hydrate le store depuis le cache Redis (dernière campagne par circuit) au premier montage.
 function hydrate() {
 	if (hydratePromise) return hydratePromise;
 	hydratePromise = (async () => {
@@ -44,7 +46,11 @@ async function persist(circuit, response) {
 }
 
 /**
- * Lance une campagne pour un circuit et met à jour le store + la persistance locale.
+ * Lance une campagne asynchrone pour un circuit et écoute la file Redis via SSE.
+ * - POST /api/{circuit}/run → ack {campagne_id, channel}
+ * - EventSource /db/campagne/{id}/events → progression puis done/error
+ * Le résultat final est persisté dans le cache Redis (kLatest/kHistory) pour
+ * l'hydratation au prochain chargement et pour le dashboard.
  * @param {string} circuit
  * @param {object} body corps CampagneRequest
  */
@@ -52,15 +58,38 @@ async function run(circuit, body) {
 	const s = state[circuit];
 	s.loading = true;
 	s.error = '';
+	s.progress = 0;
+	let es = null;
 	try {
-		const result = await runCampaign(circuit, body);
-		s.result = result;
-		persist(circuit, result);
-		return result;
+		const ack = await startRun(circuit, body);
+		const id = ack?.campagne_id;
+		if (!id) throw new Error("Réponse d'ack invalide (campagne_id manquant).");
+
+		await new Promise((resolve, reject) => {
+			es = new EventSource(`/db/campagne/${id}/events`);
+			es.onmessage = (/** @type {MessageEvent} */ e) => {
+				try {
+					const ev = JSON.parse(e.data);
+					if (ev.type === 'progress') {
+						s.progress = ev.pct ?? 0;
+					} else if (ev.type === 'done') {
+						s.result = ev.result;
+						s.progress = 100;
+						persist(circuit, ev.result);
+						resolve();
+					} else if (ev.type === 'error') {
+						reject(new Error(ev.message ?? 'Erreur de simulation.'));
+					}
+				} catch (err) {
+					reject(/** @type {Error} */ (err));
+				}
+			};
+			es.onerror = () => reject(new Error('Connexion au flux interrompue.'));
+		});
 	} catch (/** @type {any} */ e) {
 		s.error = e?.message ?? 'Erreur lors de la campagne.';
-		throw e;
 	} finally {
+		if (es) es.close();
 		s.loading = false;
 	}
 }

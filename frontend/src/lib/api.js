@@ -45,8 +45,10 @@ export function getCircuitConfig(circuit) {
 /**
  * @param {string} circuit
  * @param {object} body corps CampagneRequest (voir schemas/reporting.py)
+ * Lance une campagne asynchrone — renvoie un ack {campagne_id, statut:"en_cours",
+ * channel}. L'UI écoute ensuite la file Redis via SSE (/db/campagne/{id}/events).
  */
-export function runCampaign(circuit, body) {
+export function startRun(circuit, body) {
 	return request(`/${circuit}/run`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
