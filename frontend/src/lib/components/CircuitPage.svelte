@@ -6,6 +6,7 @@
 
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import SimulationDrawer from '$lib/components/features/SimulationDrawer.svelte';
+	import HistorySelector from '$lib/components/HistorySelector.svelte';
 	import KpiCardSpark from '$lib/components/KpiCardSpark.svelte';
 	import ThermoDiagramPanel from '$lib/components/ThermoDiagramPanel.svelte';
 	import EtatsCycleTable from '$lib/components/EtatsCycleTable.svelte';
@@ -90,15 +91,18 @@
 				<Badge tone="accent">{circuit.id}</Badge>
 				<h1 class="text-2xl font-semibold text-[var(--text-primary)]">{circuit.titre}</h1>
 			</div>
-			<button
-				type="button"
-				onclick={() => (drawerOpen = true)}
-				disabled={st.loading}
-				class="flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-4 py-2 text-sm font-medium text-[var(--text-primary)] transition-all duration-200 hover:scale-[1.01] hover:border-[var(--text-primary)] active:scale-[0.99] disabled:pointer-events-none disabled:opacity-60"
-			>
-				<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M5 3.5v9l7-4.5z" /></svg>
-				Simuler
-			</button>
+			<div class="flex flex-wrap items-center gap-2">
+				<HistorySelector slug={circuit.slug} campaigns={st.campaigns} />
+				<button
+					type="button"
+					onclick={() => (drawerOpen = true)}
+					disabled={st.loading}
+					class="flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-4 py-2 text-sm font-medium text-[var(--text-primary)] transition-all duration-200 hover:scale-[1.01] hover:border-[var(--text-primary)] active:scale-[0.99] disabled:pointer-events-none disabled:opacity-60"
+				>
+					<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M5 3.5v9l7-4.5z" /></svg>
+					Simuler
+				</button>
+			</div>
 		</div>
 		<p class="mt-1 text-sm text-[var(--text-secondary)]">{circuit.sousTitre} · états {circuit.etats}</p>
 		<div class="mt-3 flex flex-wrap gap-1.5">

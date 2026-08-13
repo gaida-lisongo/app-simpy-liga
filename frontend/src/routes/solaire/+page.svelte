@@ -8,9 +8,13 @@
 	import SolaireKpiGrid from '$lib/components/solaire/SolaireKpiGrid.svelte';
 	import SolaireDiagramme from '$lib/components/solaire/SolaireDiagramme.svelte';
 	import SolaireEtatCycle from '$lib/components/solaire/SolaireEtatCycle.svelte';
+	import SolaireProfilTube from '$lib/components/solaire/SolaireProfilTube.svelte';
+	import SolaireCourbesCPC from '$lib/components/solaire/SolaireCourbesCPC.svelte';
+	import SolaireSankey from '$lib/components/solaire/SolaireSankey.svelte';
 	import SolaireDonneesBrutes from '$lib/components/solaire/SolaireDonneesBrutes.svelte';
 	import McDonutChart from '$lib/components/McDonutChart.svelte';
 	import DensityTabs from '$lib/components/DensityTabs.svelte';
+	import HistorySelector from '$lib/components/HistorySelector.svelte';
 	import { CIRCUITS } from '$lib/constants.js';
 
 	let circuit = $derived(CIRCUITS.find((c) => c.slug === 'solaire'));
@@ -55,59 +59,74 @@
 		}
 	}
 
-	let tirages = $derived(st.result?.resultats?.tirages ?? []);
-	let etatsCycle = $derived(st.result?.resultats?.etats_cycle ?? undefined);
-	let stats = $derived(st.result?.resultats?.statistiques ?? null);
-	let convergence = $derived(st.result?.resultats?.convergence ?? null);
-	let tauxRejet = $derived(st.result?.resultats?.taux_rejet_non_physique_pct ?? null);
-	let principalSerie = $derived(tirages.map((t) => t['COP']).filter((v) => typeof v === 'number'));
+	let r = $derived(st.result?.resultats ?? null);
+	let tirages = $derived(r?.tirages ?? []);
+	let etatsCycle = $derived(r?.etats_cycle ?? undefined);
+	let stats = $derived(r?.statistiques ?? null);
+	let convergence = $derived(r?.convergence ?? null);
+	let tauxRejet = $derived(r?.taux_rejet_non_physique_pct ?? null);
+	let profilTube = $derived(r?.profil_tube ?? null);
+	let courbesCpc = $derived(r?.courbes_cpc ?? null);
+	let sankey = $derived(r?.sankey_solaire ?? null);
+	let strSerie = $derived(tirages.map((t) => t['STR']).filter((v) => typeof v === 'number'));
 </script>
 
 <div style="--accent: {circuit.accent}; --accent-soft: {circuit.accent}22; --circuit-accent: {circuit.accent};">
 	<!-- SECTION 1 — Fil d'ariane + bouton Simuler -->
 	<header class="mb-6 flex flex-wrap items-start justify-between gap-3">
 		<SolaireBreadcrumb result={st.result} />
-		<button
-			type="button"
-			onclick={() => (drawerOpen = true)}
-			disabled={st.loading}
-			class="mt-1 flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-4 py-2 text-sm font-medium text-[var(--text-primary)] transition-all duration-200 hover:scale-[1.01] hover:border-[var(--text-primary)] active:scale-[0.99] disabled:pointer-events-none disabled:opacity-60"
-		>
-			<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M5 3.5v9l7-4.5z" /></svg>
-			Simuler
-		</button>
+		<div class="flex flex-wrap items-center gap-2 mt-1">
+			<HistorySelector slug="solaire" campaigns={st.campaigns} />
+			<button
+				type="button"
+				onclick={() => (drawerOpen = true)}
+				disabled={st.loading}
+				class="flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-4 py-2 text-sm font-medium text-[var(--text-primary)] transition-all duration-200 hover:scale-[1.01] hover:border-[var(--text-primary)] active:scale-[0.99] disabled:pointer-events-none disabled:opacity-60"
+			>
+				<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M5 3.5v9l7-4.5z" /></svg>
+				Simuler
+			</button>
+		</div>
 	</header>
 
 	{#if st.result}
-		<!-- SECTION 2 — 4 KPI -->
+		<!-- SECTION 2 — 4 KPI solaires -->
 		<SolaireKpiGrid result={st.result} />
 
-		<!-- SECTION 3 + 4 — diagramme thermo & état du cycle (50/50) + donut MC + densités VA -->
+		<!-- SECTION 3 — diagramme thermo & état du cycle (50/50) -->
 		<section class="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-stretch">
-			<!-- Gauche : diagramme thermo -->
 			<div class="flex min-h-[420px] flex-col">
 				<SolaireDiagramme etats={etatsCycle} />
 			</div>
-			<!-- Droite : carte valeurs numériques des états (côte à cote) -->
 			<div class="flex min-h-[420px] flex-col">
 				<SolaireEtatCycle etats={etatsCycle} />
 			</div>
 		</section>
 
-		<!-- SECTION 4 — donut MC + densités VA (50/50) -->
+		<!-- SECTION 4 — profil tube absorbeur + courbes CPC (50/50) -->
 		<section class="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-stretch">
+			<SolaireProfilTube profil={profilTube} />
+			<SolaireCourbesCPC courbes={courbesCpc} />
+		</section>
+
+		<!-- SECTION 5 — Sankey + donut MC (50/50) -->
+		<section class="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-stretch">
+			<SolaireSankey sankey={sankey} />
 			<McDonutChart
-				label={circuit.titre}
-				serie={principalSerie}
-				stat={stats?.['COP'] ?? null}
+				label="STR"
+				serie={strSerie}
+				stat={stats?.['STR'] ?? null}
 				accent={circuit.accent}
 				{convergence}
 				tauxRejetPct={tauxRejet}
 			/>
+		</section>
+
+		<!-- SECTION 6 — densités VA + données brutes -->
+		<section class="mb-6">
 			<DensityTabs {params} {tirages} />
 		</section>
 
-		<!-- SECTION 5 — données brutes (pleine largeur) -->
 		<section class="mb-6">
 			<SolaireDonneesBrutes {tirages} campagneId={st.result.campagne_id} />
 		</section>

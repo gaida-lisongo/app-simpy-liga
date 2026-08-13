@@ -1,35 +1,36 @@
 export const SOLAIRE_KPI_LABELS = {
-	COP: {
-		label: 'Performance globale du cycle',
+	STR: {
+		label: 'Performance solaire globale',
 		unite: '',
-		tooltip: "Coefficient de performance global du cycle éjecteur R718.",
-		litterature: 'Références : COP éjecteur R718 ~ 0.8–1.2'
+		tooltip: 'Solar Thermal Ratio — STR = COP × η_th (Ghodbane 2015, ICT3 éq. 14).',
+		litterature: 'Références : 0.10 – 0.30 (Ghodbane 2015)'
 	},
-	mu: {
-		label: "Taux d'entraînement éjecteur",
+	eta_th: {
+		label: 'Rendement thermique du concentrateur',
 		unite: '',
-		tooltip: "Rapport des débits secondaire/primaire aspirés par l'éjecteur.",
-		litterature: 'Rapport ṁ_secondaire / ṁ_primaire'
-	},
-	Q_gen: {
-		label: 'Puissance thermique au générateur',
-		unite: 'kW',
-		tooltip: 'Puissance thermique apportée au générateur pour vaporiser le fluide.',
-		litterature: 'Besoin minimal : vaporiser le fluide'
+		tooltip: 'Rendement thermique instantané du CPC = Q_utile / Q_sol.',
+		litterature: 'Idéal théorique : 92.2 % (Al-akayshee 2026)'
 	},
 	eta_ex: {
 		label: 'Efficacité énergétique (2e loi)',
 		unite: '',
-		tooltip: 'Rendement exergétique global du cycle, rapport à Carnot tri-therme.',
+		tooltip: 'Rendement exergétique du sous-système solaire (Petela 1964).',
 		litterature: 'Références : 35–38 % (Abu-Hamdeh 2020)'
+	},
+	Q_utile: {
+		label: 'Puissance livrée au générateur',
+		unite: 'kW',
+		tooltip: 'Puissance thermique utile après pertes optiques et thermiques.',
+		litterature: 'Besoin minimal : 34 kW pour produire 12 kW de froid'
 	}
 };
 
 export const PARAM_LABELS = {
 	G: { label: 'Rayonnement solaire direct', unite: 'W/m²', plage: '640 — 960' },
 	eta_col: { label: 'Efficacité du concentrateur', unite: '', plage: '0.55 — 0.78' },
-	T_0: { label: 'Température ambiante', unite: '°C', plage: '19 — 31' },
-	A_col: { label: 'Surface captante', unite: 'm²', plage: '20 — 60' }
+	T_0: { label: 'Température ambiante', unite: '°C', plage: '22 — 28' },
+	A_col: { label: 'Surface captante', unite: 'm²', plage: '70 — 100' },
+	phi_s: { label: 'Pertes thermiques', unite: '', plage: '5% — 15%' }
 };
 
 /** @param {number | null | undefined} v @param {number} [d] */

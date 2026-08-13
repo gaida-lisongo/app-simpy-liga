@@ -1,30 +1,44 @@
 import { CIRCUITS } from '$lib/constants.js';
 import { startRun } from '$lib/api.js';
 
-/** @typedef {{ result: any, loading: boolean, error: string, progress: number, hydrated: boolean }} CircuitState */
+/** @typedef {{ result: any, loading: boolean, error: string, progress: number, hydrated: boolean, campaigns: any[] }} CircuitState */
 
 /** @type {Record<string, CircuitState>} */
 const state = $state(
 	Object.fromEntries(
-		CIRCUITS.map((c) => [c.slug, { result: null, loading: false, error: '', progress: 0, hydrated: false }])
+		CIRCUITS.map((c) => [c.slug, { result: null, loading: false, error: '', progress: 0, hydrated: false, campaigns: [] }])
 	)
 );
 
 let hydratePromise = /** @type {Promise<void> | null} */ (null);
 
-// Hydrate le store depuis le cache Redis (dernière campagne par circuit) au premier montage.
+// Hydrate le store depuis le cache Redis (dernière campagne par circuit + historique)
+// au premier montage. La cache accumule toutes les campagnes sans écraser.
 function hydrate() {
 	if (hydratePromise) return hydratePromise;
 	hydratePromise = (async () => {
 		try {
-			const res = await fetch('/db/campagnes');
-			if (!res.ok) return;
-			const data = await res.json();
-			for (const slug of Object.keys(data)) {
-				if (state[slug] && data[slug]) state[slug].result = data[slug];
+			// 1. Latest par circuit
+			const latestAll = await fetch('/db/campagnes').then((r) => r.json());
+			if (latestAll) {
+				for (const slug of Object.keys(latestAll)) {
+					if (state[slug] && latestAll[slug]) state[slug].result = latestAll[slug];
+				}
+			}
+			// 2. Historique (métadonnées) par circuit
+			const lists = await Promise.all(
+				Object.keys(state).map(async (slug) => {
+					const r = await fetch(`/db/campagnes?circuit=${slug}`);
+					if (!r.ok) return [slug, []];
+					const arr = await r.json();
+					return [slug, Array.isArray(arr) ? arr : []];
+				})
+			);
+			for (const [slug, arr] of lists) {
+				if (state[slug]) state[slug].campaigns = arr;
 			}
 		} catch {
-			// Persistance indisponible — on continue sans historique local, non bloquant.
+			// Persistance indisponible — non bloquant.
 		} finally {
 			for (const slug of Object.keys(state)) state[slug].hydrated = true;
 		}
@@ -35,22 +49,49 @@ function hydrate() {
 /** @param {string} circuit @param {any} response */
 async function persist(circuit, response) {
 	try {
-		await fetch('/db/campagnes', {
+		const ack = await fetch('/db/campagnes', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ circuit, response })
-		});
+		}).then((r) => r.json()).catch(() => null);
+		// Prépend la métadonnée de la nouvelle campagne dans l'historique local.
+		if (ack?.id) {
+			const s = state[circuit];
+			const meta = {
+				id: ack.id,
+				campagne_id: response.campagne_id ?? ack.id,
+				N_iterations: response.simulation?.N_iterations ?? null,
+				echantillonnage: response.simulation?.echantillonnage ?? null,
+				COP: response.resultats?.statistiques?.COP?.moyenne ?? null,
+				STR: response.resultats?.statistiques?.STR?.moyenne ?? null
+			};
+			s.campaigns = [meta, ...s.campaigns].slice(0, 20);
+		}
 	} catch {
-		// Persistance best-effort : le résultat reste affiché même si l'écriture échoue.
+		// best-effort
+	}
+}
+
+/**
+ * Récupère une campagne passée par id et l'affiche dans l'état du circuit.
+ * @param {string} circuit @param {string} id
+ */
+async function selectCampaign(circuit, id) {
+	const s = state[circuit];
+	if (!s) return;
+	try {
+		const r = await fetch(`/db/campagne/${id}`);
+		if (!r.ok) throw new Error(`Campagne ${id} introuvable`);
+		s.result = await r.json();
+	} catch (/** @type {any} */ e) {
+		s.error = e?.message ?? 'Erreur lors du chargement de la campagne.';
 	}
 }
 
 /**
  * Lance une campagne asynchrone pour un circuit et écoute la file Redis via SSE.
- * - POST /api/{circuit}/run → ack {campagne_id, channel}
- * - EventSource /db/campagne/{id}/events → progression puis done/error
- * Le résultat final est persisté dans le cache Redis (kLatest/kHistory) pour
- * l'hydratation au prochain chargement et pour le dashboard.
+ * Le résultat final est persisté dans le cache Redis (kLatest dérivé de l'historique —
+ * accumulate, n'écrase pas) et prepended à l'historique local.
  * @param {string} circuit
  * @param {object} body corps CampagneRequest
  */
@@ -94,4 +135,4 @@ async function run(circuit, body) {
 	}
 }
 
-export const simulationStore = { state, hydrate, run };
+export const simulationStore = { state, hydrate, run, selectCampaign };

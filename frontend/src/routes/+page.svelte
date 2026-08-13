@@ -63,6 +63,31 @@
 		return v === undefined || v === null ? '—' : Number(v).toFixed(d);
 	}
 
+	let clearing = $state('');
+	let clearError = $state('');
+
+	/** @param {string} slug ou 'all' */
+	async function clearCache(slug) {
+		clearing = slug;
+		clearError = '';
+		try {
+			const url = slug === 'all' ? '/db/campagnes' : `/db/campagnes?circuit=${slug}`;
+			const res = await fetch(url, { method: 'DELETE' });
+			if (!res.ok) throw new Error(`Erreur ${res.status}`);
+			if (slug === 'all') {
+				dash = null;
+				bilans = {};
+			} else {
+				delete bilans[slug];
+				bilans = { ...bilans };
+			}
+		} catch (/** @type {any} */ e) {
+			clearError = e?.message ?? 'Erreur lors du nettoyage.';
+		} finally {
+			clearing = '';
+		}
+	}
+
 	let copMoyen = $derived.by(() => {
 		if (!dash) return null;
 		const vals = Object.values(dash.circuits)
@@ -96,6 +121,20 @@
 		{:else if dash?.agrege_depuis_cache}
 			<Badge tone="neutral">Synthèse agrégée (cache)</Badge>
 		{/if}
+		<Button
+			variant="ghost"
+			onclick={() => clearCache('all')}
+			disabled={clearing === 'all'}
+			title="Supprimer l'historique de tous les circuits"
+		>
+			{#if clearing === 'all'}
+				<span class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[var(--text-muted)]/40 border-t-[var(--text-muted)]"></span>
+				Nettoyage…
+			{:else}
+				<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h10M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1m1 0v9a1 1 0 01-1 1H5a1 1 0 01-1-1V4" /><path d="M7 7v4M9 7v4" /></svg>
+				Nettoyer le cache
+			{/if}
+		</Button>
 		<Button variant="secondary" onclick={() => load(true)} disabled={loading}>
 			{loading ? 'Campagne en cours…' : 'Rafraîchir'}
 		</Button>
@@ -140,17 +179,32 @@
 					class="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-5"
 					style="--accent: {circuit.accent}; --accent-soft: {circuit.accent}22;"
 				>
-					<div class="mb-3 flex items-center gap-2">
-						<Badge tone="accent">{circuit.id}</Badge>
-						<a href="/{circuit.slug}" class="text-sm font-medium text-[var(--text-primary)] hover:underline">
-							{circuit.titre}
-						</a>
+					<div class="mb-3 flex items-center justify-between gap-2">
+						<div class="flex items-center gap-2">
+							<Badge tone="accent">{circuit.id}</Badge>
+							<a href="/{circuit.slug}" class="text-sm font-medium text-[var(--text-primary)] hover:underline">
+								{circuit.titre}
+							</a>
+						</div>
+						<button
+							type="button"
+							onclick={() => clearCache(circuit.slug)}
+							disabled={clearing === circuit.slug || !b}
+							title="Supprimer l'historique de ce circuit"
+							class="flex h-7 w-7 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--border)] text-[var(--text-muted)] transition-all duration-200 hover:scale-[1.05] hover:border-[var(--critical)] hover:text-[var(--critical)] active:scale-95 disabled:pointer-events-none disabled:opacity-30"
+						>
+							{#if clearing === circuit.slug}
+								<span class="h-3 w-3 animate-spin rounded-full border-2 border-[var(--text-muted)]/40 border-t-[var(--text-muted)]"></span>
+							{:else}
+								<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h10M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1m1 0v9a1 1 0 01-1 1H5a1 1 0 01-1-1V4" /></svg>
+							{/if}
+						</button>
 					</div>
 					{#if b && b.bilan}
 						<BilanEnergetique bilan={b.bilan} statistiques={b.statistiques} />
 					{:else}
 						<p class="text-sm text-[var(--text-muted)]">
-							Aucun bilan — lancez une campagne sur ce circuit pour alimenter le bilan global.
+							{clearing === circuit.slug ? 'Données supprimées.' : 'Aucun bilan — lancez une campagne sur ce circuit pour alimenter le bilan global.'}
 						</p>
 					{/if}
 				</div>

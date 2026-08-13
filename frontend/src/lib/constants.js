@@ -77,22 +77,7 @@ export const CIRCUITS = [
 			{ key: 'eta_th',  label: 'Rendement thermique',      unite: '—'   },
 			{ key: 'STR',     label: 'Performance globale',      unite: '—'   }
 		],
-		segments: []
-	},
-		kpiUnits: {
-			STR: '—', eta_th: '—', eta_ex: '—', Q_utile: 'kW'
-		},
-		// Colonnes table données brutes
-		tiragesColonnes: [
-			{ key: 'G',       label: 'Rayonnement solaire',       unite: 'W/m²' },
-			{ key: 'eta_col', label: 'Efficacité concentrateur',  unite: '—'    },
-			{ key: 'T_0',     label: 'Température ambiante',      unite: '°C'   },
-			{ key: 'A_col',   label: 'Surface captante',          unite: 'm²'   },
-			{ key: 'Q_utile', label: 'Puissance au générateur',   unite: 'kW'   },
-			{ key: 'eta_th',  label: 'Rendement thermique',       unite: '—'    },
-			{ key: 'STR',     label: 'Performance globale',       unite: '—'    }
-		],
-		segments: []
+segments: []
 	}
 ];
 
