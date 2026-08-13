@@ -30,13 +30,14 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# CORS : autorise le frontend Svelte en développement.
+# CORS : autorise le frontend Svelte en développement et en production.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",   # Vite/SvelteKit dev
         "http://localhost:4173",   # preview
         "http://127.0.0.1:5173",
+        "https://simpy-liga.elmes-solution.site",  # frontend prod (pm2 app-simpy-liga-front)
     ],
     allow_credentials=True,
     allow_methods=["*"],
