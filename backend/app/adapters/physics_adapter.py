@@ -19,16 +19,20 @@ def core_is_real() -> bool:
     return True
 
 
-def run_cycle(params: dict, cible_kW: float = 12.0) -> dict:
+def run_cycle(params: dict, cible_kW: float = 12.0, include_states: bool = False) -> dict:
     """
     Dimensionnement inverse : trouve m_dot_p pour atteindre cible_kW.
 
     Args:
-        params   : dict {nom_param: valeur} issu d'un tirage LHS.
-        cible_kW : charge frigorifique cible [kW] (défaut 12 kW).
+        params         : dict {nom_param: valeur} issu d'un tirage LHS.
+        cible_kW       : charge frigorifique cible [kW] (défaut 12 kW).
+        include_states : si True, sérialise aussi les points d'état (T,P,h,s,x)
+                         du cycle — coûteux inutilement sur 10 000 tirages MC,
+                         réservé au calcul du cycle de référence.
 
     Returns:
-        dict de sorties distribuées : m_dot_p, m_dot_s, COP, mu, eta_ex.
+        dict de sorties distribuées : m_dot_p, m_dot_s, COP, mu, eta_ex,
+        et si include_states=True, "states" (liste de points d'état).
     """
     # Extraction des paramètres tirés
     T_g      = params.get("T_g",      95.0) + 273.15   # °C → K
@@ -64,6 +68,8 @@ def run_cycle(params: dict, cible_kW: float = 12.0) -> dict:
     cop    = m.get("COP",     0.0)
     q_evap = m.get("Q_evap",  0.0)
     q_gen  = m.get("Q_gen",   0.0)
+    q_cond = m.get("Q_cond",  0.0)
+    w_pump = m.get("W_pump",  0.0)
     mu     = m.get("mu",      0.0)
     m_pri  = m.get("m_dot_p", 0.0)
     m_sec  = m.get("m_dot_s", 0.0)
@@ -80,13 +86,37 @@ def run_cycle(params: dict, cible_kW: float = 12.0) -> dict:
         and cop > 0 and mu > 0 and q_evap > 0
     )
 
-    return {
+    out = {
         "COP":       round(cop,    5),
         "eta_ex":    eta_ex,
         "mu":        round(mu,     5),
         "Q_evap":    round(q_evap, 4),
         "Q_gen":     round(q_gen,  4),
+        "Q_cond":    round(q_cond, 4),
+        "W_pompe":   round(w_pump, 4),
         "m_dot_pri": round(m_pri,  6),
         "m_dot_sec": round(m_sec,  6),
         "physically_valid": bool(valid),
     }
+
+    if include_states:
+        out["states"] = _serialize_states(cr.states)
+
+    return out
+
+
+def _serialize_states(states: dict) -> list[dict]:
+    """Convertit les ThermoState internes (SI : K, Pa, J/kg, J/kg·K) vers les
+    unités de reporting (°C, bar, kJ/kg, kJ/kg·K), triés par numéro de point."""
+    out = []
+    for point in sorted(states.keys()):
+        st = states[point]
+        out.append({
+            "point": str(point),
+            "T": round(st.T - 273.15, 3) if st.T is not None else None,
+            "P": round(st.P / 1e5, 4) if st.P is not None else None,
+            "h": round(st.h / 1000.0, 3) if st.h is not None else None,
+            "s": round(st.s / 1000.0, 5) if st.s is not None else None,
+            "x": round(st.x, 5) if st.x is not None else None,
+        })
+    return out

@@ -55,3 +55,19 @@ def build_ppf(p: ParametreIncertain) -> Callable[[float], float]:
 def sample_names(params: list[ParametreIncertain]) -> list[str]:
     """Noms des paramètres réellement variables (hors 'fixe')."""
     return [p.nom for p in params if p.loi != Loi.fixe]
+
+
+def nominal_value(p: ParametreIncertain) -> float:
+    """
+    Valeur centrale d'un paramètre — sert à construire le cycle de référence
+    (diagrammes thermodynamiques) plutôt qu'un tirage aléatoire quelconque.
+    """
+    if p.loi == Loi.fixe:
+        return p.valeur if p.valeur is not None else (p.mode or 0.0)
+    if p.loi == Loi.uniforme:
+        return (float(p.min) + float(p.max)) / 2.0
+    if p.loi == Loi.normale:
+        return float(p.mode)
+    if p.loi == Loi.triangulaire:
+        return float(p.mode)
+    raise ValueError(f"Loi non supportée : {p.loi}")

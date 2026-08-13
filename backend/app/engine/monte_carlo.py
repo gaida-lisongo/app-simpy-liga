@@ -13,9 +13,9 @@ from scipy.stats import qmc
 
 from app.schemas.reporting import (
     ParametreIncertain, SimulationConfig,
-    Resultats, StatSortie, Convergence,
+    Resultats, StatSortie, Convergence, EtatCycle, BilanEnergetique,
 )
-from app.engine.distributions import build_ppf
+from app.engine.distributions import build_ppf, nominal_value
 from app.adapters.physics_adapter import run_cycle
 
 
@@ -56,6 +56,7 @@ def run_campaign(
 
     # Boucle Monte Carlo
     collected: dict[str, list[float]] = {s: [] for s in sorties_suivies}
+    tirages_bruts: list[dict[str, float]] = []
     n_rejets = 0
 
     for i in range(n):
@@ -69,12 +70,32 @@ def run_campaign(
             n_rejets += 1
             continue
 
+        ligne: dict[str, float] = {nom: tirage[nom] for nom in noms}
         for s in sorties_suivies:
             if s in out and isinstance(out[s], (int, float)):
                 collected[s].append(float(out[s]))
+                ligne[s] = float(out[s])
+        tirages_bruts.append(ligne)
+
+    # Cycle de référence (paramètres à leur valeur nominale) — pour les diagrammes
+    # thermodynamiques et le bilan énergétique, plutôt qu'un tirage aléatoire quelconque.
+    nominal = dict(fixes)
+    for p in variables:
+        nominal[p.nom] = nominal_value(p)
+    ref = run_cycle(nominal, cible_kW=cible_kW, include_states=True)
 
     # Analyse statistique
     resultats = Resultats()
+    resultats.tirages = tirages_bruts
+
+    if ref.get("physically_valid", False):
+        resultats.etats_cycle = [EtatCycle(**s) for s in ref.get("states", [])]
+        resultats.bilan_energetique = BilanEnergetique(
+            Q_evap=ref.get("Q_evap"), Q_gen=ref.get("Q_gen"),
+            Q_cond=ref.get("Q_cond"), W_pompe=ref.get("W_pompe"),
+            COP=ref.get("COP"),
+        )
+
     raw: dict[str, np.ndarray] = {}
 
     for s, vals in collected.items():

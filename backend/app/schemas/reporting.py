@@ -121,6 +121,25 @@ class TestStatistique(BaseModel):
     commentaire: Optional[str] = None
 
 
+class EtatCycle(BaseModel):
+    """Point d'état thermodynamique du cycle de référence (valeurs nominales des paramètres)."""
+    point: str = Field(..., description="Numéro du point, ex. '1', '7', '8'")
+    T: Optional[float] = Field(None, description="Température [°C]")
+    P: Optional[float] = Field(None, description="Pression [bar]")
+    h: Optional[float] = Field(None, description="Enthalpie massique [kJ/kg]")
+    s: Optional[float] = Field(None, description="Entropie massique [kJ/kg·K]")
+    x: Optional[float] = Field(None, description="Titre vapeur [-], None si monophasique")
+
+
+class BilanEnergetique(BaseModel):
+    """Bilan énergétique du cycle de référence (valeurs nominales des paramètres)."""
+    Q_evap: Optional[float] = Field(None, description="Puissance frigorifique [kW]")
+    Q_gen: Optional[float] = Field(None, description="Puissance apportée au générateur [kW]")
+    Q_cond: Optional[float] = Field(None, description="Puissance rejetée au condenseur [kW]")
+    W_pompe: Optional[float] = Field(None, description="Puissance de pompage [kW]")
+    COP: Optional[float] = None
+
+
 class Resultats(BaseModel):
     """Bloc de résultats statistiques d'une campagne."""
     statistiques: dict[str, StatSortie] = Field(default_factory=dict)
@@ -128,6 +147,17 @@ class Resultats(BaseModel):
     sensibilite_sobol: list[IndiceSobol] = Field(default_factory=list)
     tests: list[TestStatistique] = Field(default_factory=list)
     taux_rejet_non_physique_pct: Optional[float] = None
+    etats_cycle: list[EtatCycle] = Field(
+        default_factory=list,
+        description="Points d'état du cycle de référence (paramètres à leur valeur nominale).",
+    )
+    bilan_energetique: Optional[BilanEnergetique] = Field(
+        None, description="Bilan Q_evap/Q_gen/Q_cond/W_pompe/COP du cycle de référence."
+    )
+    tirages: list[dict[str, float]] = Field(
+        default_factory=list,
+        description="Tirages Monte Carlo bruts (paramètres variables + sorties suivies), un par ligne.",
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -151,6 +181,10 @@ class ReportingResponse(BaseModel):
     article: MetaArticle
     perimetre: dict = Field(default_factory=dict)
     simulation: SimulationConfig
+    parametres_incertains: list[ParametreIncertain] = Field(
+        default_factory=list,
+        description="Paramètres incertains par défaut (présents sur /config ; échos de la requête sur /run).",
+    )
     resultats: Resultats = Field(default_factory=Resultats)
     campagne_id: Optional[str] = Field(None, description="Horodatage de campagne")
     statut: str = Field("ok", description="ok | en_cours | erreur")

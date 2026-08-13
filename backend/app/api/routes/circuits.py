@@ -55,6 +55,7 @@ def get_config(circuit: Circuit) -> ReportingResponse:
         article=MetaArticle(circuit=circuit, **cfg["meta"]),
         perimetre=cfg["perimetre"],
         simulation=SimulationConfig(cible=_CIBLE_DEFAUT),
+        parametres_incertains=cfg["parametres_incertains"],
         statut="config",
         message="Configuration par défaut — dimensionnement inverse 12 kW.",
     )
@@ -84,6 +85,7 @@ def run(circuit: Circuit, req: CampagneRequest | None = None) -> ReportingRespon
         article=MetaArticle(circuit=circuit, **META[circuit]),
         perimetre=PERIMETRES[circuit],
         simulation=sim,
+        parametres_incertains=params,
         resultats=resultats,
         campagne_id=_now(),
         statut="ok",
