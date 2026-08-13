@@ -1,0 +1,58 @@
+@import 'tailwindcss';
+
+:root {
+	color-scheme: dark;
+	--page: #0f1117;
+	--surface: #1a1d27;
+	--surface-raised: #21242f;
+	--border: #2d3148;
+	--border-strong: #3a3f5c;
+
+	/* Accent contextuel par circuit — redéfini localement sur la page circuit,
+	   retombe sur l'accent neutre ailleurs (dashboard, UI générique). */
+	--circuit-accent: var(--accent);
+	--circuit-accent-soft: var(--accent-soft);
+	--text-primary: #ffffff;
+	--text-secondary: #c3c2b7;
+	--text-muted: #898781;
+
+	--accent: #3987e5;
+	--accent-soft: rgba(57, 135, 229, 0.14);
+	--accent-2: #199e70;
+	--accent-2-soft: rgba(25, 158, 112, 0.14);
+
+	--good: #0ca30c;
+	--warning: #fab219;
+	--serious: #ec835a;
+	--critical: #e66767;
+
+	--radius-sm: 6px;
+	--radius-md: 10px;
+	--radius-lg: 14px;
+
+	font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+	color-scheme: dark;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	background: var(--page);
+	color: var(--text-primary);
+	min-height: 100%;
+}
+
+body {
+	margin: 0;
+}
+
+::selection {
+	background: var(--accent-soft);
+}
+
+.tabular {
+	font-variant-numeric: tabular-nums;
+}
