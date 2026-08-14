@@ -62,7 +62,7 @@
       "description": "UI/UX — Planification features et corrections interface"
     },
     "builder": {
-      "mode": "primary",
+      "mode": "subagent",
       "model": "opencode-go/deepseek-v4-flash",
       "temperature": 0.1,
       "prompt": "{file:./.opencode/agents/builder.md}",
@@ -84,7 +84,7 @@
       "description": "Science — Planification corrections thermodynamiques backend"
     },
     "patcher": {
-      "mode": "primary",
+      "mode": "subagent",
       "model": "opencode-go/qwen3.6-plus",
       "temperature": 0.1,
       "prompt": "{file:./.opencode/agents/patcher.md}",
@@ -129,5 +129,6 @@
       },
       "description": "Rapport d'avancement — lecture seule progress.md"
     }
-  }
+  },
+  "defaultAgent": "status"
 }
