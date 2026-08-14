@@ -10,16 +10,6 @@
   },
   "maxContextTokens": 40000,
   "command": {
-    "plan-ui": {
-      "template": "Analyse cette demande UI/UX et produis le plan dans memory-bank/feature/activeContext.md : $ARGUMENTS",
-      "description": "SUPERMAN — Planifier une feature / correction UI",
-      "agent": "superman"
-    },
-    "build": {
-      "template": "Exécute le plan dans memory-bank/feature/activeContext.md. Si absent, dis-le. $ARGUMENTS",
-      "description": "BUILDER — Implémenter le plan UI/UX",
-      "agent": "builder"
-    },
     "plan-science": {
       "template": "Analyse cette anomalie ou feature backend et produis le plan dans memory-bank/science/activeContext.md : $ARGUMENTS",
       "description": "EINSTEIN — Planifier une correction scientifique backend",
