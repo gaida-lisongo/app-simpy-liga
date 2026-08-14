@@ -1,9 +1,11 @@
 @import 'tailwindcss';
 
-:root {
+/* ── Thème par défaut (dark) — rétro-compat avec l'existant ──────────── */
+:root,
+:root[data-theme='dark'] {
 	color-scheme: dark;
 
-	/* ── Uber-inspired : base noir/blanc, accent vert lime ─────────────
+	/* Uber-inspired : base noir/blanc, accent vert lime.
 	   Tout-noir/blanc par défaut ; couleur réservée aux accents et états
 	   sémantiques — pas de décoration. Style Uber/Linear. */
 	--page: #000000;
@@ -32,12 +34,52 @@
 	--serious: #ec835a;
 	--critical: #e5484d;
 
-	--radius-sm: 6px;
-	--radius-md: 10px;
-	--radius-lg: 14px;
+	/* Surfaces auth (glass) */
+	--auth-glow: rgba(6, 193, 103, 0.35);
+	--auth-panel-bg: radial-gradient(
+			120% 80% at 20% 0%,
+			rgba(6, 193, 103, 0.18),
+			transparent 60%
+		),
+		radial-gradient(120% 80% at 100% 100%, rgba(31, 184, 122, 0.12), transparent 60%),
+		linear-gradient(180deg, #0a0a0b 0%, #050506 100%);
+}
 
-	font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
-	color-scheme: dark;
+/* ── Thème clair ─────────────────────────────────────────────────────── */
+:root[data-theme='light'] {
+	color-scheme: light;
+
+	--page: #f7f8fa;
+	--surface: #ffffff;
+	--surface-raised: #f1f3f6;
+	--border: #e3e6ec;
+	--border-strong: #c9cfd8;
+
+	--accent: #059a55;
+	--accent-soft: rgba(5, 154, 85, 0.12);
+	--accent-2: #0d8a4f;
+	--accent-2-soft: rgba(13, 138, 79, 0.14);
+
+	--circuit-accent: var(--accent);
+	--circuit-accent-soft: var(--accent-soft);
+
+	--text-primary: #0b1220;
+	--text-secondary: #4a5364;
+	--text-muted: #7a8499;
+
+	--good: #0a8a4a;
+	--warning: #c9831f;
+	--serious: #d36b48;
+	--critical: #d63b40;
+
+	--auth-glow: rgba(5, 154, 85, 0.25);
+	--auth-panel-bg: radial-gradient(
+			120% 80% at 20% 0%,
+			rgba(5, 154, 85, 0.10),
+			transparent 60%
+		),
+		radial-gradient(120% 80% at 100% 100%, rgba(13, 138, 79, 0.08), transparent 60%),
+		linear-gradient(180deg, #fbfcfe 0%, #eef2f7 100%);
 }
 
 * {
@@ -49,6 +91,9 @@ body {
 	background: var(--page);
 	color: var(--text-primary);
 	min-height: 100%;
+	transition:
+		background-color 200ms ease,
+		color 200ms ease;
 }
 
 body {

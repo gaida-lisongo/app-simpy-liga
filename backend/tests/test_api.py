@@ -7,7 +7,13 @@ from app.core.catalogue import PARAMETRES
 from app.engine.monte_carlo import run_campaign
 from app.engine.runner import N_MAX
 
-client = TestClient(app)
+# AuthTestClient injecte automatiquement `X-Internal-Token` pour franchir
+# le middleware d'auth (cf. tests/conftest.py). Le TestClient standard reste
+# importé au cas où un test veut sciemment tester l'absence du token.
+from tests.conftest import _AuthClient  # noqa: E402
+
+client = _AuthClient(app)
+raw_client = TestClient(app)
 
 
 def _fake_resultats():
@@ -26,9 +32,24 @@ def _fake_resultats():
 
 
 def test_health():
-    r = client.get("/api/health")
-    assert r.status_code == 200
-    assert r.json()["statut"] == "ok"
+	r = client.get("/api/health")
+	assert r.status_code == 200
+	assert r.json()["statut"] == "ok"
+
+
+def test_api_rejette_sans_token():
+	"""Middleware d'auth : toute requête /api/* sans X-Internal-Token doit être refusée."""
+	r = raw_client.get("/api/moteur/config")
+	assert r.status_code == 401
+	assert "Jeton interne" in r.json()["detail"]
+
+
+def test_api_accepte_avec_token():
+	"""Middleware d'auth : avec le bon header, la requête passe."""
+	r = raw_client.get("/api/health")
+	assert r.status_code == 200
+	r = client.get("/api/moteur/config")
+	assert r.status_code == 200
 
 
 def test_racine():

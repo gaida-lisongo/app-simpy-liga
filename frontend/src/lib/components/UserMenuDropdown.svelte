@@ -1,6 +1,10 @@
 <script>
 	import { page } from '$app/state';
+	import { User } from '@lucide/svelte';
 	import { CIRCUITS } from '$lib/constants.js';
+
+	/** @type {{ user?: { email: string, nom: string, role: string } | null }} */
+	let { user = null } = $props();
 
 	const nav = [{ slug: '', id: '—', titre: 'Dashboard' }, ...CIRCUITS];
 
@@ -67,6 +71,28 @@
 						<span class="font-medium">{item.titre}</span>
 					</a>
 				{/each}
+
+				{#if user}
+					<div class="my-2 border-t border-[var(--border)]"></div>
+					{@const active = page.url.pathname === '/mon-compte'}
+					<a
+						href="/mon-compte"
+						role="menuitem"
+						onclick={() => (open = false)}
+						class="flex items-center gap-3 rounded-[var(--radius-sm)] px-3 py-2.5 text-sm transition-colors {active
+							? 'bg-[var(--accent-soft)] text-[var(--text-primary)]'
+							: 'text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)]'}"
+					>
+						<span
+							class="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-sm)] {active
+								? 'bg-[var(--accent)] text-white'
+								: 'bg-white/5 text-[var(--text-muted)]'}"
+						>
+							<User size={14} />
+						</span>
+						<span class="font-medium">Mon compte</span>
+					</a>
+				{/if}
 			</nav>
 		</div>
 	{/if}

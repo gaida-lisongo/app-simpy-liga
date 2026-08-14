@@ -16,11 +16,16 @@ Auteur : Projet Thèse R718 — SimpyLIGA
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+
 from app.api.routes import circuits
+from app.api.middleware import InternalAuthMiddleware
 from app.engine.pool import shutdown_executor
 
 
@@ -55,6 +60,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_middleware(InternalAuthMiddleware)
 
 app.include_router(circuits.router)
 

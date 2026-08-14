@@ -1,6 +1,6 @@
 <script>
 	import { enhance } from '$app/forms';
-	import { fade, fly } from 'svelte/transition';
+	import { fade, fly, scale } from 'svelte/transition';
 	import {
 		Users,
 		UserPlus,
@@ -10,7 +10,9 @@
 		Copy,
 		Check,
 		LoaderCircle,
-		Link
+		Link,
+		Trash2,
+		AlertTriangle
 	} from '@lucide/svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -21,6 +23,11 @@
 	let pendingCreer = $state(false);
 	/** @type {string | null} */
 	let pendingRenvoi = $state(null);
+	/** @type {string | null} */
+	let pendingSuppression = $state(null);
+	/** @type {{ email: string, nom: string } | null} */
+	let confirmSuppression = $state(null);
+	let confirmationTexte = $state('');
 	let lienCopie = $state(false);
 
 	const inputClass =
@@ -30,12 +37,29 @@
 		form?.ok && form.section === 'creer' ? form : form?.section === 'creer' ? form : null
 	);
 	const feedbackRenvoi = $derived(form?.ok && form.section === 'renvoyer' ? form : null);
+	const feedbackSuppression = $derived(
+		form?.ok && form.section === 'supprimer' ? form : form?.section === 'supprimer' ? form : null
+	);
+	const peutConfirmerSuppression = $derived(confirmationTexte === 'SUPPRIMER');
 
 	/** @param {string} lien */
 	async function copierLien(lien) {
 		await navigator.clipboard.writeText(lien);
 		lienCopie = true;
 		setTimeout(() => (lienCopie = false), 2000);
+	}
+
+	/**
+	 * @param {{ email: string, nom: string }} u
+	 */
+	function demanderSuppression(u) {
+		confirmSuppression = u;
+		confirmationTexte = '';
+	}
+
+	function annulerSuppression() {
+		confirmSuppression = null;
+		confirmationTexte = '';
 	}
 </script>
 
@@ -217,6 +241,27 @@
 					</div>
 				{/if}
 
+				{#if feedbackSuppression?.error}
+					<div
+						in:fade={{ duration: 150 }}
+						role="alert"
+						class="mx-5 mt-4 flex items-center gap-2 rounded-[var(--radius-sm)] bg-[color-mix(in_oklab,var(--critical)_14%,transparent)] px-3 py-2 text-sm text-[var(--critical)]"
+					>
+						<AlertTriangle size={14} class="shrink-0" />
+						{feedbackSuppression.error}
+					</div>
+				{/if}
+
+				{#if feedbackSuppression?.ok}
+					<div
+						in:fade={{ duration: 150 }}
+						class="mx-5 mt-4 flex items-center gap-2 rounded-[var(--radius-sm)] bg-[var(--accent-soft)] px-3 py-2 text-sm text-[var(--text-primary)]"
+					>
+						<Trash2 size={14} class="shrink-0 text-[var(--accent)]" />
+						Compte {feedbackSuppression.email} supprimé.
+					</div>
+				{/if}
+
 				{#if data.users.length === 0}
 					<div class="flex flex-col items-center gap-3 px-5 py-12 text-center">
 						<Users size={28} class="text-[var(--text-muted)]" />
@@ -244,37 +289,49 @@
 									</Badge>
 								</div>
 
-								<form
-									method="post"
-									action="?/renvoyer"
-									use:enhance={() => {
-										pendingRenvoi = user.email;
-										return ({ update }) => {
-											pendingRenvoi = null;
-											update();
-										};
-									}}
-								>
-									<input type="hidden" name="email" value={user.email} />
-									<input type="hidden" name="nom" value={user.nom} />
-									<input
-										type="hidden"
-										name="reinitialisation"
-										value={user.statut === 'active' ? '1' : '0'}
-									/>
-									<button
-										type="submit"
-										disabled={pendingRenvoi === user.email}
-										class="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--border-strong)] px-2.5 py-1.5 text-xs font-medium text-[var(--text-secondary)] transition-all duration-200 hover:border-[var(--accent)] hover:text-[var(--text-primary)] active:scale-[0.98] disabled:opacity-50"
+								<div class="flex items-center gap-2">
+									<form
+										method="post"
+										action="?/renvoyer"
+										use:enhance={() => {
+											pendingRenvoi = user.email;
+											return ({ update }) => {
+												pendingRenvoi = null;
+												update();
+											};
+										}}
 									>
-										{#if pendingRenvoi === user.email}
-											<LoaderCircle size={12} class="animate-spin" />
-										{:else}
-											<RefreshCw size={12} />
-										{/if}
-										{user.statut === 'active' ? 'Réinitialiser' : 'Renvoyer'}
+										<input type="hidden" name="email" value={user.email} />
+										<input type="hidden" name="nom" value={user.nom} />
+										<input
+											type="hidden"
+											name="reinitialisation"
+											value={user.statut === 'active' ? '1' : '0'}
+										/>
+										<button
+											type="submit"
+											disabled={pendingRenvoi === user.email}
+											class="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--border-strong)] px-2.5 py-1.5 text-xs font-medium text-[var(--text-secondary)] transition-all duration-200 hover:border-[var(--accent)] hover:text-[var(--text-primary)] active:scale-[0.98] disabled:opacity-50"
+										>
+											{#if pendingRenvoi === user.email}
+												<LoaderCircle size={12} class="animate-spin" />
+											{:else}
+												<RefreshCw size={12} />
+											{/if}
+											{user.statut === 'active' ? 'Réinitialiser' : 'Renvoyer'}
+										</button>
+									</form>
+
+									<button
+										type="button"
+										onclick={() => demanderSuppression({ email: user.email, nom: user.nom })}
+										class="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--border-strong)] px-2.5 py-1.5 text-xs font-medium text-[var(--text-secondary)] transition-all duration-200 hover:border-[var(--critical)] hover:text-[var(--critical)] active:scale-[0.98]"
+										aria-label={`Supprimer ${user.nom}`}
+									>
+										<Trash2 size={12} />
+										Supprimer
 									</button>
-								</form>
+								</div>
 							</li>
 						{/each}
 					</ul>
@@ -283,3 +340,94 @@
 		</section>
 	</div>
 </div>
+
+{#if confirmSuppression}
+	<div
+		role="dialog"
+		aria-modal="true"
+		aria-labelledby="suppression-titre"
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+		transition:fade={{ duration: 150 }}
+	>
+		<div
+			class="w-full max-w-md rounded-[var(--radius-lg)] border border-[var(--border-strong)] bg-[var(--surface)] p-6 shadow-2xl"
+			transition:scale={{ duration: 180, start: 0.96 }}
+		>
+			<div class="mb-4 flex items-start gap-3">
+				<span
+					class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-[color-mix(in_oklab,var(--critical)_18%,transparent)] text-[var(--critical)]"
+				>
+					<AlertTriangle size={18} />
+				</span>
+				<div class="min-w-0">
+					<h2
+						id="suppression-titre"
+						class="text-base font-semibold text-[var(--text-primary)]"
+					>
+						Supprimer {confirmSuppression.nom} ?
+					</h2>
+					<p class="mt-1 text-sm text-[var(--text-muted)]">
+						Cette action est irréversible. Toutes les sessions actives de
+						<strong class="text-[var(--text-secondary)]">{confirmSuppression.email}</strong>
+						seront révoquées.
+					</p>
+				</div>
+			</div>
+
+			<form
+				method="post"
+				action="?/supprimer"
+				use:enhance={() => {
+					pendingSuppression = confirmSuppression?.email ?? null;
+					return ({ update }) => {
+						pendingSuppression = null;
+						confirmSuppression = null;
+						confirmationTexte = '';
+						update();
+					};
+				}}
+				class="flex flex-col gap-3"
+			>
+				<input type="hidden" name="email" value={confirmSuppression.email} />
+
+				<label class="flex flex-col gap-1.5">
+					<span class="text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">
+						Tapez <code class="font-mono">SUPPRIMER</code> pour confirmer
+					</span>
+					<input
+						type="text"
+						name="confirmation"
+						bind:value={confirmationTexte}
+						autocomplete="off"
+						class={inputClass}
+						placeholder="SUPPRIMER"
+					/>
+				</label>
+
+				<div class="mt-2 flex justify-end gap-2">
+					<button
+						type="button"
+						onclick={annulerSuppression}
+						class="inline-flex items-center justify-center rounded-[var(--radius-sm)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-4 py-2 text-sm font-medium text-[var(--text-primary)] transition-all duration-150 hover:border-[var(--text-primary)] active:scale-[0.98]"
+					>
+						Annuler
+					</button>
+					<button
+						type="submit"
+						disabled={!peutConfirmerSuppression || pendingSuppression !== null}
+						class="inline-flex items-center justify-center gap-2 rounded-[var(--radius-sm)] px-4 py-2 text-sm font-medium text-white transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+						style="background:var(--critical)"
+					>
+						{#if pendingSuppression}
+							<LoaderCircle size={14} class="animate-spin" />
+							Suppression…
+						{:else}
+							<Trash2 size={14} />
+							Supprimer définitivement
+						{/if}
+					</button>
+				</div>
+			</form>
+		</div>
+	</div>
+{/if}

@@ -1,0 +1,18 @@
+# Dépendances et builds
+node_modules/
+frontend/.svelte-kit/
+frontend/build/
+frontend/node_modules/
+backend/__pycache__/
+backend/.venv/
+venv/
+
+# Logs et fichiers système
+*.log
+*.tmp
+.DS_Store
+.git/
+
+# Gros rapports Markdown ou historiques de logs
+audit_solaire.md
+fix-solar.md

@@ -1,10 +1,9 @@
 """Tests M2 — endpoint de fiabilité (Clopper-Pearson)."""
 
-from fastapi.testclient import TestClient
-
 from app.main import app
+from tests.conftest import _AuthClient
 
-client = TestClient(app)
+client = _AuthClient(app)
 
 
 def _tirages(vals):

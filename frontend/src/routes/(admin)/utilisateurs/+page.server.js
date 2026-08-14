@@ -1,6 +1,14 @@
 import { fail } from '@sveltejs/kit';
-import { listerUsers, declarerUser, creerTokenActivation } from '$lib/server/auth.js';
+import {
+	listerUsers,
+	declarerUser,
+	creerTokenActivation,
+	supprimerUser,
+	compterAdminsActifs,
+	getUser
+} from '$lib/server/auth.js';
 import { sendMail, mailActivationHtml } from '$lib/server/mail.js';
+import { logAuth } from '$lib/server/log.js';
 
 export async function load() {
 	return { users: await listerUsers() };
@@ -17,7 +25,7 @@ export const actions = {
 		const role = String(fd.get('role') ?? 'chercheur');
 		const envoyer = fd.get('envoyer') === 'on';
 
-		if (!nom) return fail(400, { section: 'creer', error: 'Le nom est requis.' });
+		if (!nom || nom.length < 2) return fail(400, { section: 'creer', error: 'Le nom est requis (2 caractères minimum).' });
 		if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
 			return fail(400, { section: 'creer', error: 'Adresse email invalide.' });
 
@@ -67,6 +75,41 @@ export const actions = {
 			return { ok: true, section: 'renvoyer', email, mailEnvoye: true };
 		} catch {
 			return { ok: true, section: 'renvoyer', email, lien, mailErreur: true };
+		}
+	},
+
+	supprimer: async ({ request, locals }) => {
+		const fd = await request.formData();
+		const email = String(fd.get('email') ?? '').trim().toLowerCase();
+		const confirmation = String(fd.get('confirmation') ?? '').trim();
+
+		if (confirmation !== 'SUPPRIMER')
+			return fail(400, { section: 'supprimer', error: 'Tapez SUPPRIMER pour confirmer.' });
+
+		if (!email) return fail(400, { section: 'supprimer', error: 'Email manquant.' });
+		if (locals.user?.email === email)
+			return fail(400, {
+				section: 'supprimer',
+				error: 'Vous ne pouvez pas supprimer votre propre compte depuis cette interface.'
+			});
+
+		try {
+			const cible = await getUser(email);
+			if (cible?.role === 'admin') {
+				const restants = await compterAdminsActifs();
+				if (restants <= 1)
+					return fail(400, {
+						section: 'supprimer',
+						error: 'Impossible de supprimer le dernier administrateur actif.'
+					});
+			}
+			await supprimerUser(email);
+			logAuth('compte_supprime', { email, par: locals.user?.email });
+			return { ok: true, section: 'supprimer', email };
+		} catch (e) {
+			if (String(/** @type {Error} */ (e)?.message).includes('utilisateur_introuvable'))
+				return fail(404, { section: 'supprimer', error: 'Utilisateur introuvable.' });
+			return fail(500, { section: 'supprimer', error: 'Suppression impossible. Réessayez.' });
 		}
 	}
 };

@@ -1,7 +1,12 @@
-import { PUBLIC_API_URL } from '$env/static/public';
+/**
+ * Façade fetch vers le backend.
+ *
+ * Toutes les requêtes passent par `/api-proxy/{path}` — une route SvelteKit
+ * qui injecte le `X-Internal-Token` côté serveur. Le navigateur ne voit jamais
+ * le secret partagé ni l'URL interne du backend FastAPI.
+ */
 
-// Toujours dérivé de PUBLIC_API_URL — jamais d'URL en dur.
-const BASE = `${PUBLIC_API_URL}/api`;
+const BASE = '/api-proxy';
 
 /** @param {Response} res */
 async function unwrap(res) {
@@ -24,7 +29,7 @@ async function request(path, init) {
 	try {
 		res = await fetch(`${BASE}${path}`, init);
 	} catch {
-		throw new Error(`API injoignable (${BASE}) — vérifiez la connexion réseau.`);
+		throw new Error('API injoignable — vérifiez la connexion réseau.');
 	}
 	return unwrap(res);
 }
@@ -45,8 +50,6 @@ export function getCircuitConfig(circuit) {
 /**
  * @param {string} circuit
  * @param {object} body corps CampagneRequest (voir schemas/reporting.py)
- * Lance une campagne asynchrone — renvoie un ack {campagne_id, statut:"en_cours",
- * channel}. L'UI écoute ensuite la file Redis via SSE (/db/campagne/{id}/events).
  */
 export function startRun(circuit, body) {
 	return request(`/${circuit}/run`, {
