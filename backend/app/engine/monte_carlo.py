@@ -103,6 +103,16 @@ def run_campaign(
 
     cible_kW = config.cible.valeur if config.cible else 12.0
 
+    # Budget total de progression (tirages LHS + tirages Sobol s'il y en a) —
+    # calculé à l'avance pour que la progression SSE reste continue et
+    # monotone sur toute la durée de la campagne, Sobol inclus, au lieu de
+    # sembler figée après les tirages LHS pendant que Sobol tourne en silence.
+    sobol_total = 0
+    if N_sobol:
+        from app.engine.sensitivity import sobol_sample_size
+        sobol_total = sobol_sample_size(d, N_sobol)
+    total_budget = n + sobol_total
+
     # Échantillonnage LHS
     if d > 0:
         sampler = qmc.LatinHypercube(d=d, seed=seed)
@@ -143,7 +153,7 @@ def run_campaign(
             n_rejets += result["n_rejets"]
             done += len(chunk)
             if progress_cb is not None:
-                progress_cb(done, n)
+                progress_cb(done, total_budget)
     else:
         for tirage in all_tirages:
             out = run_cycle(tirage, cible_kW=cible_kW)
@@ -158,7 +168,7 @@ def run_campaign(
                 tirages_bruts.append(ligne)
 
     if progress_cb is not None:
-        progress_cb(n, n)
+        progress_cb(n, total_budget)
 
     # Cycle de référence (paramètres à leur valeur nominale) — pour les diagrammes
     # thermodynamiques et le bilan énergétique, plutôt qu'un tirage aléatoire quelconque.
@@ -235,8 +245,14 @@ def run_campaign(
 
     if N_sobol:
         from app.engine.sensitivity import compute_sobol
+
+        def _sobol_progress(done_sobol: int) -> None:
+            if progress_cb is not None:
+                progress_cb(n + done_sobol, total_budget)
+
         resultats.sensibilite_sobol = compute_sobol(
-            params, sorties_suivies, cible_kW, N_sobol=N_sobol)
+            params, sorties_suivies, cible_kW, N_sobol=N_sobol,
+            progress_cb=_sobol_progress if progress_cb is not None else None)
 
     return resultats, raw
 

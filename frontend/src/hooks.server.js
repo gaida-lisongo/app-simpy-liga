@@ -12,7 +12,10 @@ export async function handle({ event, resolve }) {
 
 	const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 
-	if (!event.locals.user && !isPublic && !pathname.startsWith('/db')) {
+	// /db/* expose les résultats de simulation (campagnes, dashboard, flux SSE)
+	// — aucune exception ici, sans quoi n'importe qui peut lire les données
+	// sans être authentifié.
+	if (!event.locals.user && !isPublic) {
 		redirect(303, '/connexion');
 	}
 
