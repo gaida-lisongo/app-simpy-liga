@@ -4,8 +4,10 @@ progression + le résultat final sur la file Redis (pub/sub via liste LPUSH/RPOP
 
 Principe : l'endpoint /run retourne immédiatement un ack {campagne_id, channel} ;
 le thread worker exécute run_campaign(), pousse des événements {progress} puis
-{done, result} (ou {error}) dans la liste Redis. L'UI écoute cette liste via SSE
-(SvelteKit /db/campagne/{id}/events) et se met à jour en temps réel.
+{done} (léger — sans tirages bruts) dans la liste Redis. Le résultat complet
+est persisté côté serveur via save_campaign(). L'UI écoute cette liste via SSE
+(SvelteKit /db/campagne/{id}/events) et se met à jour en temps réel, puis
+re-fetch la campagne complète via /db/campagne/{id}.
 
 N_iterations est plafonné à N_MAX (10 000) côté serveur.
 
@@ -13,6 +15,8 @@ Auteur : Projet Thèse R718 — SimpyLIGA
 """
 from __future__ import annotations
 
+import copy
+import logging
 import threading
 from datetime import datetime, timezone
 
@@ -21,6 +25,8 @@ from app.engine.sensitivity import N_SOBOL_DEFAUT
 from app.schemas.reporting import ReportingResponse, MetaArticle
 from app.core.catalogue import META, PERIMETRES
 from app.core import upstash
+
+log = logging.getLogger(__name__)
 
 # Plafond de tirages — au-delà, le coût computationnel est prohibitif (solveur
 # CoolProp par tirage + sérialisation Pydantic des tirages bruts).
@@ -80,12 +86,32 @@ def start_run(circuit, params, sim, sorties) -> dict:
                 statut="ok",
                 message=f"Inv. {sim.N_iterations} tirages LHS — cible {cible_v} kW.",
             )
+
+            # 1. Persistance server-side du payload COMPLET (avec tirages)
+            payload_complet = resp.model_dump(mode="json")
+            ok = upstash.save_campaign(circuit.value, campagne_id, payload_complet)
+
+            # 2. Construire l'événement done LÉGER (copie sans tirages bruts)
+            done_event = copy.deepcopy(payload_complet)
+            if "resultats" in done_event and isinstance(done_event["resultats"], dict):
+                done_event["resultats"]["tirages"] = []
+            done_event["persiste"] = ok
+
             upstash.push_event(campagne_id, {
                 "type": "done",
                 "campagne_id": campagne_id,
-                "result": resp.model_dump(mode="json"),
+                "result": done_event,
             })
+
+            # 3. Si la persistance a échoué, signaler l'erreur après le done
+            if not ok:
+                upstash.push_event(campagne_id, {
+                    "type": "error",
+                    "message": "Persistance Redis échouée — résultats affichés mais non sauvegardés",
+                })
+
         except Exception as e:  # noqa: BLE001
+            log.exception("Erreur dans le worker de la campagne %s", campagne_id)
             upstash.push_event(campagne_id, {"type": "error", "message": str(e)})
 
     threading.Thread(target=worker, daemon=True).start()
