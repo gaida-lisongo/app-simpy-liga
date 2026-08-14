@@ -116,16 +116,23 @@ async function run(circuit, body) {
 				source.onopen = () => {
 					retries = 0;
 				};
-				source.onmessage = (/** @type {MessageEvent} */ e) => {
+				source.onmessage = async (/** @type {MessageEvent} */ e) => {
 					try {
 						const ev = JSON.parse(e.data);
 						if (ev.type === 'progress') {
 							s.progress = ev.pct ?? 0;
 						} else if (ev.type === 'done') {
 							settled = true;
-							s.result = ev.result;
 							s.progress = 100;
-							persist(circuit, ev.result);
+							if (ev.persiste) {
+								// Backend a persisté en Upstash — va chercher la campagne complète
+								const full = await fetch(`/db/campagne/${id}`).then((r) => r.json());
+								s.result = full;
+								// Plus de persist() ici — backend a déjà persisté
+							} else {
+								// Fallback : result complet vient directement du SSE
+								s.result = ev.result;
+							}
 							resolve();
 						} else if (ev.type === 'error') {
 							settled = true;

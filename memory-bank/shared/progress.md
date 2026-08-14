@@ -48,7 +48,7 @@ Cœur physique CoolProp intégré. Monte-Carlo LHS seed=42 validé.
 | A7 | Export CSV = miroir JSON | `[ ]` à faire |
 | M1 | sensitivity.py — Sobol, SRC, Spearman | `[~]` partiel |
 | M2 | /api/solaire/fiabilite endpoint | `[~]` fiabilite.py présent |
-| P1 | Persistance campagnes : 413 SvelteKit (payload 4 Mo > 512 Ko) + persist fire-and-forget | `[x]` backend PATCHER ✅ (37/37 tests verts, Δh_gen OK, intégration réelle Upstash validée) — frontend SUPERMAN en attente |
+| P1 | Persistance campagnes : 413 SvelteKit (payload 4 Mo > 512 Ko) + persist fire-and-forget | `[x]` backend PATCHER ✅ (37/37 tests verts, Δh_gen OK, intégration réelle Upstash validée) — frontend BUILDER ✅ (contrat SSE adapté, fetch Redis après done, build OK) |
 
 ### Frontend — page solaire
 
