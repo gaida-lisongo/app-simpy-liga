@@ -5,12 +5,12 @@
 | Commande | Agent | Coût estimé | Quand l'utiliser |
 |---|---|---|---|
 | `/status` | STATUS (MiMo V2.5) | ~$0.001 | "Où en est-on ?" |
-| `/plan-ui [demande]` | SUPERMAN (GLM-5.3) | ~$0.05 | Nouvelle feature UI ou correction |
-| `/build` | BUILDER (DeepSeek Flash) | ~$0.02 | Exécuter le plan SUPERMAN |
+| `/plan-ui [demande]` | SUPERMAN (MiniMax-M3) | ~$0.02 | Nouvelle feature UI ou correction |
+| `/build` | BUILDER (DeepSeek V4 Flash) | ~$0.02 | Exécuter le plan SUPERMAN |
 | `/plan-science [anomalie]` | EINSTEIN (Qwen3.8 Max) | ~$0.08 | Correction backend/physique |
-| `/patch` | PATCHER (Kimi K2.6) | ~$0.03 | Exécuter le plan EINSTEIN |
-| `/audit [scope]` | SHEERLOCK→SENTINEL | ~$0.15 | Audit sécurité |
-| `/secure` | SENTINEL (DeepSeek Pro) | ~$0.04 | Appliquer patches sécurité |
+| `/patch` | PATCHER (Qwen3.6 Plus) | ~$0.02 | Exécuter le plan EINSTEIN |
+| `/audit [scope]` | SHEERLOCK→SENTINEL | ~$0.10 | Audit sécurité |
+| `/secure` | SENTINEL (DeepSeek V4 Pro) | ~$0.04 | Appliquer patches sécurité |
 
 ## Workflow type — Feature UI
 

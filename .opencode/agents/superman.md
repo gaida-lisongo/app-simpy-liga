@@ -1,5 +1,5 @@
 ---
-description: "SUPERMAN — Planification UI/UX et features. Département: UI/UX. Modèle: glm-5.3"
+description: "SUPERMAN — Planification UI/UX et features. Département: UI/UX. Modèle: minimax-m3"
 ---
 
 # SUPERMAN — Agent de Planification UI/UX

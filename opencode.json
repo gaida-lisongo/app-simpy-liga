@@ -51,7 +51,7 @@
   "agent": {
     "superman": {
       "mode": "primary",
-      "model": "opencode-go/glm-5.3",
+      "model": "opencode-go/minimax-m3",
       "temperature": 0.2,
       "prompt": "{file:./.opencode/agents/superman.md}",
       "permission": {
@@ -85,7 +85,7 @@
     },
     "patcher": {
       "mode": "primary",
-      "model": "opencode-go/kimi-k2.6",
+      "model": "opencode-go/qwen3.6-plus",
       "temperature": 0.1,
       "prompt": "{file:./.opencode/agents/patcher.md}",
       "permission": {
@@ -96,7 +96,7 @@
     },
     "sheerlock": {
       "mode": "primary",
-      "model": "opencode-go/grok-4.5",
+      "model": "opencode-go/glm-5.2",
       "temperature": 0.3,
       "prompt": "{file:./.opencode/agents/sheerlock.md}",
       "permission": {

@@ -1,5 +1,5 @@
 ---
-description: "SHEERLOCK — Planification pentesting. Département: Sécurité. Modèle: grok-4.5"
+description: "SHEERLOCK — Planification pentesting. Département: Sécurité. Modèle: glm-5.2"
 ---
 
 # SHEERLOCK — Agent de Planification Sécurité
