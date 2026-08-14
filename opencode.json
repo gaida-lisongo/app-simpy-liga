@@ -1,101 +1,133 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "instructions": ["AGENTS.md"],
+  "instructions": [
+    "AGENTS.md"
+  ],
   "skills": {
-    "paths": ["frontend/.opencode/skills"]
+    "paths": [
+      "frontend/.opencode/skills"
+    ]
   },
   "maxContextTokens": 40000,
   "command": {
-    "wf-plan": {
-      "template": "Analyse cette demande et fournis une checklist d'implémentation structurée : $ARGUMENTS. Ne modifie AUCUN fichier. Reste concis, va droit au but. Respecte les règles d'économie de tokens (ne lis que les fichiers nécessaires).",
-      "description": "Phase 1a — Planifier une feature (agent: planif)",
-      "agent": "planif"
+    "plan-ui": {
+      "template": "Analyse cette demande UI/UX et produis le plan dans memory-bank/feature/activeContext.md : $ARGUMENTS",
+      "description": "SUPERMAN — Planifier une feature / correction UI",
+      "agent": "superman"
     },
-    "wf-code": {
-      "template": "Implémente cette demande de façon ciblée : $ARGUMENTS. Pas de refactoring non sollicité. Vérifie le build (npm run build côté frontend, pytest côté backend) si tu touches à du code structurel.",
-      "description": "Phase 1b — Coder une feature (agent: code)",
-      "agent": "code"
+    "build": {
+      "template": "Exécute le plan dans memory-bank/feature/activeContext.md. Si absent, dis-le. $ARGUMENTS",
+      "description": "BUILDER — Implémenter le plan UI/UX",
+      "agent": "builder"
     },
-    "wf-fix": {
-      "template": "Corrige ce bug ou applique cette retouche UI/UX : $ARGUMENTS. Reste focalisé, minimise les diffs. Ne touche qu'au périmètre signalé.",
-      "description": "Phase 1c — Corriger un bug / retouche UI (agent: fix)",
-      "agent": "fix"
+    "plan-science": {
+      "template": "Analyse cette anomalie ou feature backend et produis le plan dans memory-bank/science/activeContext.md : $ARGUMENTS",
+      "description": "EINSTEIN — Planifier une correction scientifique backend",
+      "agent": "einstein"
     },
-    "wf-audit": {
-      "template": "Inspecte le code (backend/ + frontend/) et génère un rapport d'audit markdown : $ARGUMENTS. Cherche : failles de sécurité, vulnérabilités, régressions, secrets exposés, validations manquantes. Ne modifie AUCUN fichier. Sors une checklist priorisée.",
-      "description": "Phase 2a — Audit sécurité (agent: audit-check, subagent)",
-      "agent": "audit-check",
+    "patch": {
+      "template": "Exécute le plan dans memory-bank/science/activeContext.md. Si absent, dis-le. $ARGUMENTS",
+      "description": "PATCHER — Corriger le backend selon le plan EINSTEIN",
+      "agent": "patcher"
+    },
+    "audit": {
+      "template": "Lance l'audit sécurité sur le périmètre : $ARGUMENTS. Écris le rapport dans memory-bank/security/findings/.",
+      "description": "SHEERLOCK → SENTINEL — Planifier et exécuter l'audit sécurité",
+      "agent": "sheerlock",
       "subtask": true
     },
-    "wf-audit-fix": {
-      "template": "Implémente les correctifs du rapport d'audit fourni : $ARGUMENTS. Reste strictement dans le périmètre des failles listées. Vérifie le build après.",
-      "description": "Phase 2b — Appliquer les correctifs d'audit (agent: audit-fix, subagent)",
-      "agent": "audit-fix",
+    "secure": {
+      "template": "Applique les patches du dernier rapport dans memory-bank/security/findings/. $ARGUMENTS",
+      "description": "SENTINEL — Appliquer les correctifs de sécurité",
+      "agent": "sentinel",
       "subtask": true
     },
-    "wf-cycle": {
-      "template": "Lance le cycle complet sur cette demande : $ARGUMENTS. Génère d'abord la checklist (Phase 1a), puis liste explicitement les étapes 1b/1c/2a/2b à enchaîner. Ne code rien toi-même.",
-      "description": "Orchestration du cycle complet (planif → code → fix → audit → audit-fix)",
-      "agent": "planif"
+    "status": {
+      "template": "Lis memory-bank/shared/progress.md et dis-moi où en est le projet.",
+      "description": "STATUS — Rapport d'avancement rapide (token minimal)",
+      "agent": "status"
     }
   },
   "agent": {
-    "planif": {
+    "superman": {
       "mode": "primary",
-      "model": "opencode-go/minimax-m3",
+      "model": "opencode-go/glm-5.3",
       "temperature": 0.2,
-      "prompt": "{file:./.opencode/agents/planif.md}",
+      "prompt": "{file:./.opencode/agents/superman.md}",
       "permission": {
         "edit": "deny",
         "bash": "ask",
         "webfetch": "allow"
       },
-      "description": "Phase 1a: Planification d'une mission/feature"
+      "description": "UI/UX — Planification features et corrections interface"
     },
-    "code": {
+    "builder": {
       "mode": "primary",
       "model": "opencode-go/deepseek-v4-flash",
       "temperature": 0.1,
-      "prompt": "{file:./.opencode/agents/code.md}",
+      "prompt": "{file:./.opencode/agents/builder.md}",
       "permission": {
         "edit": "allow",
         "bash": "allow"
       },
-      "description": "Phase 1b & 2b: Implémentation rapide du code"
+      "description": "UI/UX — Implémentation frontend Svelte 5"
     },
-    "fix": {
+    "einstein": {
       "mode": "primary",
-      "model": "opencode-go/qwen3.7-plus",
-      "temperature": 0.2,
-      "prompt": "{file:./.opencode/agents/fix.md}",
-      "permission": {
-        "edit": "allow",
-        "bash": "ask"
-      },
-      "description": "Phase 1c & 2c: Retouches, bugs UI/UX et retours utilisateurs"
-    },
-    "audit-check": {
-      "mode": "subagent",
-      "model": "opencode-go/glm-5.2",
-      "temperature": 0.3,
-      "prompt": "{file:./.opencode/agents/audit-check.md}",
+      "model": "opencode-go/qwen3.8-max",
+      "temperature": 0.1,
+      "prompt": "{file:./.opencode/agents/einstein.md}",
       "permission": {
         "edit": "deny",
+        "bash": "ask"
+      },
+      "description": "Science — Planification corrections thermodynamiques backend"
+    },
+    "patcher": {
+      "mode": "primary",
+      "model": "opencode-go/kimi-k2.6",
+      "temperature": 0.1,
+      "prompt": "{file:./.opencode/agents/patcher.md}",
+      "permission": {
+        "edit": "allow",
+        "bash": "allow"
+      },
+      "description": "Science — Correction backend physique et Monte-Carlo"
+    },
+    "sheerlock": {
+      "mode": "primary",
+      "model": "opencode-go/grok-4.5",
+      "temperature": 0.3,
+      "prompt": "{file:./.opencode/agents/sheerlock.md}",
+      "permission": {
+        "edit": "allow",
         "bash": "ask",
         "webfetch": "allow"
       },
-      "description": "Phase 2a: Audit de sécurité, régressions et failles"
+      "description": "Sécurité — Planification et orchestration pentesting"
     },
-    "audit-fix": {
+    "sentinel": {
       "mode": "subagent",
       "model": "opencode-go/deepseek-v4-pro",
       "temperature": 0.1,
-      "prompt": "{file:./.opencode/agents/audit-fix.md}",
+      "prompt": "{file:./.opencode/agents/sentinel.md}",
       "permission": {
         "edit": "allow",
         "bash": "allow"
       },
-      "description": "Phase 2b: Implémentation des correctifs d'audit"
+      "description": "Sécurité — Exécution audit et patches sécurité"
+    },
+    "status": {
+      "mode": "primary",
+      "model": "opencode-go/mimo-v2.5",
+      "temperature": 0.0,
+      "prompt": "{file:./.opencode/agents/status.md}",
+      "permission": {
+        "edit": "deny",
+        "bash": "deny",
+        "webfetch": "deny"
+      },
+      "description": "Rapport d'avancement — lecture seule progress.md"
     }
   }
 }

@@ -204,7 +204,7 @@ def run_campaign(
         resultats.courbes_cpc = CourbesCPC(**compute_courbes_cpc(
             eta_col_nom=_nom.get("eta_col", 0.68),
             phi_s_nom=_nom.get("phi_s", 0.10),
-            cop_ref=ref.get("COP", 0.35) if ref.get("physically_valid", False) else 0.35))
+            cop_ref=ref.get("COP") if ref.get("physically_valid", False) and ref.get("COP", 0) > 0 else None))
         resultats.sankey_solaire = SankeySolaire(
             **compute_sankey_solaire(_Q_sol, _Q_opt, _Q_utile))
 

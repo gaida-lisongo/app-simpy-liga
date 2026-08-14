@@ -300,12 +300,16 @@ def compute_courbes_cpc(eta_col_nom: float = 0.68,
                         phi_s_nom: float = 0.10,
                         A_col_nom: float = 85.0,
                         T_0_nom: float = 25.0,
-                        cop_ref: float = 0.35) -> dict:
+                        cop_ref: float | None = None) -> dict:
     """
     Courbes de balayage pour visualisation frontend.
 
     eta_th = f(G) : à eta_col, phi_s, A_col, T_0 nominaux
     STR = f(T_gen) : STR = COP_ejc(T_gen) × eta_th_nom
+
+    cop_ref : COP issu du cycle nominal résolu (Voie B).
+              Si None (cycle nominal invalide), la courbe STR est omise
+              plutôt que calculée avec 0.35 qui est l'ancien COP incompatible.
     """
     import numpy as np
 
@@ -316,11 +320,17 @@ def compute_courbes_cpc(eta_col_nom: float = 0.68,
     ]
 
     T_gen_range = np.linspace(75, 120, 30).tolist()
-    STR_vs_Tgen = [
-        round(cop_ref * (1.0 + 0.005 * (t - 95.0)) * eta_col_nom
-              * (1.0 - phi_s_nom), 5)
-        for t in T_gen_range
-    ]
+    if cop_ref is not None and cop_ref > 0:
+        STR_vs_Tgen = [
+            round(cop_ref * (1.0 + 0.005 * (t - 95.0)) * eta_col_nom
+                  * (1.0 - phi_s_nom), 5)
+            for t in T_gen_range
+        ]
+    else:
+        # cop_ref absent ou invalide : on ne fabrique pas de courbe STR avec
+        # une valeur arbitraire (l'ancien 0.35 était l'hypothèse COP=0.35
+        # du dimensionnement préliminaire, incompatible avec le COP réel ~1.04).
+        STR_vs_Tgen = [None] * len(T_gen_range)
 
     return {
         "G_range":       [round(g, 1) for g in G_range],

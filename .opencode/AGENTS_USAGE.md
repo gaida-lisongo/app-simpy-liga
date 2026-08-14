@@ -1,169 +1,67 @@
-# Utilisation des agents — app-simpy-liga
+# Guide d'utilisation des agents — SimpyLIGA
 
-## 1. Récap de l'organisation
+## Commandes rapides
 
-Tu as défini **5 agents** dans `opencode.json` répartis en 2 phases :
+| Commande | Agent | Coût estimé | Quand l'utiliser |
+|---|---|---|---|
+| `/status` | STATUS (MiMo V2.5) | ~$0.001 | "Où en est-on ?" |
+| `/plan-ui [demande]` | SUPERMAN (GLM-5.3) | ~$0.05 | Nouvelle feature UI ou correction |
+| `/build` | BUILDER (DeepSeek Flash) | ~$0.02 | Exécuter le plan SUPERMAN |
+| `/plan-science [anomalie]` | EINSTEIN (Qwen3.8 Max) | ~$0.08 | Correction backend/physique |
+| `/patch` | PATCHER (Kimi K2.6) | ~$0.03 | Exécuter le plan EINSTEIN |
+| `/audit [scope]` | SHEERLOCK→SENTINEL | ~$0.15 | Audit sécurité |
+| `/secure` | SENTINEL (DeepSeek Pro) | ~$0.04 | Appliquer patches sécurité |
 
-| Agent           | Modèle              | Rôle                                                      | Mode idéal     |
-| --------------- | ------------------- | --------------------------------------------------------- | -------------- |
-| `planif`        | minimax-m3          | Phase 1a — Planifier une feature (analyse, pas de code)   | `primary`      |
-| `code`          | deepseek-v4-flash   | Phase 1b & 2b — Implémenter le code ciblé                 | `primary`      |
-| `fix`           | qwen-3.7-plus       | Phase 1c & 2c — Retouches UI/UX, bugs remontés            | `primary`      |
-| `audit-check`   | glm-5.2             | Phase 2a — Audit sécurité / régressions                   | `subagent`     |
-| `audit-fix`     | deepseek-v4-pro      | Phase 2b — Corriger les failles d'audit                   | `subagent`     |
-
-⚠️ **Ta config actuelle omet le champ `mode`** (défaut = `all`). Il est recommandé de l'expliciter pour qu'ils n'apparaissent pas en double dans les menus.
-
-## 2. Config corrigée (à fusionner dans `opencode.json`)
-
-```jsonc
-{
-  "$schema": "https://opencode.ai/config.json",
-  "instructions": ["AGENTS.md"],
-  "skills": { "paths": ["frontend/.opencode/skills"] },
-  "maxContextTokens": 40000,
-  "agents": {
-    "planif": {
-      "mode": "primary",
-      "model": "minimax-m3",
-      "temperature": 0.2,
-      "description": "Phase 1a: Planification d'une mission/feature"
-    },
-    "code": {
-      "mode": "primary",
-      "model": "deepseek-v4-flash",
-      "temperature": 0.1,
-      "description": "Phase 1b & 2b: Implémentation rapide du code"
-    },
-    "fix": {
-      "mode": "primary",
-      "model": "qwen-3.7-plus",
-      "temperature": 0.2,
-      "description": "Phase 1c & 2c: Retouches, bugs UI/UX et retours utilisateurs"
-    },
-    "audit-check": {
-      "mode": "subagent",
-      "model": "glm-5.2",
-      "temperature": 0.3,
-      "description": "Phase 2a: Audit de sécurité, régressions et failles"
-    },
-    "audit-fix": {
-      "mode": "subagent",
-      "model": "deepseek-v4-pro",
-      "temperature": 0.1,
-      "description": "Phase 2b: Implémentation des correctifs d'audit"
-    }
-  }
-}
-```
-
-## 3. Les 4 méthodes pour changer d'agent (sans `/models`)
-
-### A. `Tab` — cycle entre primary agents ⭐ le plus rapide
-
-Pendant une session TUI, appuie sur `Tab` (ou `Shift+Tab`) pour basculer entre `planif`, `code`, `fix` sans rien taper.
+## Workflow type — Feature UI
 
 ```
-[planif] » planifier la feature X
-          ↓ Tab
-[code]   » (la conversation continue, nouveau modèle)
+1. /plan-ui "ajouter graphe STR=f(T_gen) dans la page solaire"
+   → SUPERMAN écrit dans memory-bank/feature/activeContext.md
+   → /reset ou nouvelle session
+
+2. /build
+   → BUILDER lit le plan et implémente
+   → journalise dans memory-bank/feature/journal/YYYY-MM-DD.md
+   → /compact avant de terminer
 ```
 
-### B. `@mention` — invoquer un subagent
-
-Dans n'importe quel message, tape `@` pour ouvrir l'autocomplétion et choisis le subagent.
+## Workflow type — Correction scientifique
 
 ```
-@audit-check audite le backend FastAPI et génère le rapport
-@audit-fix applique le rapport d'audit du 14 août
+1. /plan-science "m_dot_pri semble encore à 0.018, vérifier A1"
+   → EINSTEIN lit systemPatterns.md + science/activeContext.md
+   → écrit plan détaillé dans memory-bank/science/activeContext.md
+   → /reset
+
+2. /patch
+   → PATCHER reproduit → teste rouge → corrige → teste vert
+   → /compact
 ```
 
-### C. Slash commands — un `/` pour orchestrer
+## Workflow type — "Où en est-on ?"
 
-Crée `.opencode/commands/wf-feature.md` :
-
-```markdown
----
-description: Workflow complet feature (planif → code → fix)
-agent: planif
----
-Analyse cette demande : $ARGUMENTS.
-Sors une checklist structurée, ne touche à aucun fichier.
+```
+/status
+→ STATUS lit UNIQUEMENT memory-bank/shared/progress.md
+→ Répond en 10 lignes
+→ Coût : ~$0.001
 ```
 
-Puis tape `/wf-feature ajouter pagination sur /api/tarifs`.
+## Règles d'économie de tokens
 
-Tu peux créer un fichier par étape :
+1. `maxContextTokens: 40000` — déjà configuré
+2. STATUS lit UN seul fichier — ne jamais lui demander d'analyser du code
+3. `/compact` obligatoire en fin de session BUILDER et PATCHER (long sessions)
+4. SUPERMAN et EINSTEIN ne modifient aucun fichier source → pas de rollback à gérer
+5. Ne jamais charger `memory-bank/shared/systemPatterns.md` dans une session UI — c'est pour Science uniquement
 
-- `.opencode/commands/wf-plan.md` → agent `planif`
-- `.opencode/commands/wf-code.md` → agent `code`
-- `.opencode/commands/wf-fix.md` → agent `fix`
-- `.opencode/commands/wf-audit.md` → agent `audit-check`, `subtask: true`
+## Département par tâche
 
-### D. Sessions parallèles — un agent par terminal
-
-Ouvre 3 terminaux et fixe l'agent au démarrage :
-
-```bash
-# Terminal 1
-opencode --agent planif
-
-# Terminal 2
-opencode --agent code
-
-# Terminal 3
-opencode --agent fix
 ```
-
-Chaque terminal a son contexte isolé. Idéal pour les 3 phases séquentielles.
-
-## 4. Workflow concret (exemple de bout en bout)
-
-**Demande** : « ajouter un bouton de reset sur la page dashboard »
-
-**Étape 1 — Planif** (via Tab ou `/wf-plan`)
+Bug Svelte / CSS / UI               → SUPERMAN → BUILDER
+Nouvelle page ou composant          → SUPERMAN → BUILDER
+Correction thermodynamique backend  → EINSTEIN → PATCHER
+Nouveau circuit (A1/A2/A3)          → EINSTEIN → PATCHER
+Faille de sécurité                  → SHEERLOCK → SENTINEL
+Rapport "où en est-on"              → STATUS
 ```
-[planif] » @planif comment ajouter un bouton reset sur le dashboard ?
-```
-→ Retour : checklist des fichiers à modifier (`+page.svelte`, `Button.svelte`, etc.)
-
-**Étape 2 — Code** (Tab pour switch auto)
-```
-[code] » @code implémente la checklist précédente, scope = frontend uniquement
-```
-→ Retour : code appliqué, `npm run build` doit passer.
-
-**Étape 3 — Fix** (Tab)
-```
-[fix] » @fix le bouton reset fonctionne mais l'animation est saccadée sur mobile
-```
-→ Retour : retouches UI/UX ciblées.
-
-**Étape 4 — Audit** (subagent via @)
-```
-[code] » @audit-check vérifie les régressions sur /dashboard après ces changements
-```
-→ Retour : rapport markdown.
-
-**Étape 5 — Audit-fix** (subagent via @)
-```
-[code] » @audit-fix applique le rapport ci-dessus
-```
-
-## 5. Keybinds utiles (déjà fournis par défaut)
-
-| Raccourci          | Action                              |
-| ------------------ | ----------------------------------- |
-| `Tab`              | Agent suivant (primary)             |
-| `Shift+Tab`        | Agent précédent (primary)           |
-| `Ctrl+P`           | Liste des commandes                 |
-| `<leader>a` (= `Ctrl+X` puis `a`) | Liste des agents         |
-| `<leader>m`        | Liste des modèles                   |
-| `Up` / `Down` / `Right` / `Left` | Navigation entre sessions subagents |
-
-## 6. Anti-pièges
-
-- **Ne jamais utiliser `process.env` côté client** — utiliser `$env/static/public` (SvelteKit).
-- **`mode: primary` ≠ permission totale** — les primary agents héritent des permissions globales. Verrouille `edit`/`bash` à `ask` sur `planif` si tu veux qu'il ne touche jamais au code.
-- **`@subagent` crée une session enfant** — remonte avec `Up` (`session_parent`) pour revenir à la session parente.
-- **Invoquer un subagent ne change pas ton primary agent** — tu restes sur `code` même après `@audit-check`.

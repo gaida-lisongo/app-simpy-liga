@@ -16,3 +16,12 @@ venv/
 # Gros rapports Markdown ou historiques de logs
 audit_solaire.md
 fix-solar.md
+
+# memory-bank journaux — trop longs, chargés sur besoin uniquement
+memory-bank/feature/journal/
+memory-bank/science/journal/
+memory-bank/security/findings/
+
+# Fichiers Python compilés
+*.pyc
+*.pyo
