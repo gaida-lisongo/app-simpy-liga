@@ -15,12 +15,24 @@ Auteur : Projet Thèse R718 — SimpyLIGA
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import circuits
+from app.engine.pool import shutdown_executor
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    yield
+    # Arrête le pool de process Monte Carlo proprement à l'extinction du serveur.
+    shutdown_executor()
+
 
 app = FastAPI(
+    lifespan=lifespan,
     title="SimpyLIGA API",
     description=(
         "API de reporting pour la validation stochastique (Monte Carlo) d'une "

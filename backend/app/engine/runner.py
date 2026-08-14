@@ -48,9 +48,16 @@ def start_run(circuit, params, sim, sorties) -> dict:
     channel = f"simpy:campagne:{campagne_id}:events"
 
     step = max(1, sim.N_iterations // 200)
+    _last_reported = 0
 
     def progress_cb(n_done: int, n_total: int) -> None:
-        if n_done % step == 0 or n_done == n_total:
+        nonlocal _last_reported
+        # Le moteur peut appeler ce callback par lots de taille variable
+        # (chunks parallèles) plutôt qu'à chaque tirage : on ne compte plus
+        # sur une correspondance exacte au modulo, seulement sur l'écart
+        # cumulé depuis le dernier événement publié.
+        if n_done - _last_reported >= step or n_done >= n_total:
+            _last_reported = n_done
             upstash.push_event(campagne_id, {
                 "type": "progress",
                 "n_done": n_done,

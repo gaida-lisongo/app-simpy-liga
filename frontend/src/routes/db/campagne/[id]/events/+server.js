@@ -9,16 +9,28 @@ export async function GET({ params }) {
 	const id = params.id;
 	const enc = (/** @type {string} */ s) => new TextEncoder().encode(s);
 
+	const HEARTBEAT_MS = 15000; // garde la connexion active côté proxy pendant les tirages lents
+
 	const stream = new ReadableStream({
 		async start(controller) {
 			let finished = false;
+			let lastActivity = Date.now();
 			const deadline = Date.now() + 35 * 60 * 1000; // garde-fou 35 min
 			try {
 				while (!finished && Date.now() < deadline) {
 					const events = await popEvents(id);
-					for (const ev of events) {
-						controller.enqueue(enc(`data: ${JSON.stringify(ev)}\n\n`));
-						if (ev.type === 'done' || ev.type === 'error') finished = true;
+					if (events.length) {
+						for (const ev of events) {
+							controller.enqueue(enc(`data: ${JSON.stringify(ev)}\n\n`));
+							if (ev.type === 'done' || ev.type === 'error') finished = true;
+						}
+						lastActivity = Date.now();
+					} else if (Date.now() - lastActivity >= HEARTBEAT_MS) {
+						// Ligne de commentaire SSE (ignorée par EventSource) — évite qu'un
+						// reverse-proxy coupe la connexion pour inactivité entre deux progress
+						// events, si un tirage est lent (solveur CoolProp).
+						controller.enqueue(enc(': ping\n\n'));
+						lastActivity = Date.now();
 					}
 					if (!finished) await new Promise((r) => setTimeout(r, 700));
 				}

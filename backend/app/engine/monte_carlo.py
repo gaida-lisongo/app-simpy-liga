@@ -8,6 +8,7 @@ Auteur : Projet Thèse R718 — SimpyLIGA
 """
 from __future__ import annotations
 
+import math
 from typing import Callable, Optional
 
 import numpy as np
@@ -19,7 +20,51 @@ from app.schemas.reporting import (
     ProfilTube, CourbesCPC, SankeySolaire,
 )
 from app.engine.distributions import build_ppf, nominal_value
+from app.engine.pool import get_executor, MAX_WORKERS
 from app.adapters.physics_adapter import run_cycle
+
+# En dessous de ce nombre de tirages, l'overhead de répartition entre process
+# (sérialisation + IPC) dépasse le gain — on reste séquentiel dans le process
+# courant.
+PARALLEL_THRESHOLD = 150
+
+
+def _run_chunk(
+    tirages: list[dict[str, float]],
+    noms: list[str],
+    sorties_suivies: list[str],
+    cible_kW: float,
+) -> dict:
+    """
+    Exécuté dans un worker process : calcule run_cycle() pour un lot de
+    tirages déjà résolus (valeurs numériques pures — rien à pickler côté
+    fonctions/closures). Fonction module-level pour rester picklable par
+    référence.
+    """
+    collected: dict[str, list[float]] = {s: [] for s in sorties_suivies}
+    lignes: list[dict[str, float]] = []
+    n_rejets = 0
+    for tirage in tirages:
+        out = run_cycle(tirage, cible_kW=cible_kW)
+        if not out.get("physically_valid", False):
+            n_rejets += 1
+            continue
+        ligne: dict[str, float] = {nom: tirage[nom] for nom in noms}
+        for s in sorties_suivies:
+            if s in out and isinstance(out[s], (int, float)):
+                collected[s].append(float(out[s]))
+                ligne[s] = float(out[s])
+        lignes.append(ligne)
+    return {"collected": collected, "lignes": lignes, "n_rejets": n_rejets}
+
+
+def _chunked(items: list, n_chunks: int) -> list[list]:
+    """Découpe `items` en `n_chunks` tranches contiguës (ordre préservé)."""
+    n = len(items)
+    if n_chunks <= 1:
+        return [items]
+    size = math.ceil(n / n_chunks)
+    return [items[i:i + size] for i in range(0, n, size)]
 
 
 def run_campaign(
@@ -65,31 +110,52 @@ def run_campaign(
     else:
         u = np.zeros((n, 0))
 
-    # Boucle Monte Carlo
-    collected: dict[str, list[float]] = {s: [] for s in sorties_suivies}
-    tirages_bruts: list[dict[str, float]] = []
-    n_rejets = 0
-    step = max(1, n // 200)  # cadence de progression (~200 notifications max)
-
+    # Résolution des tirages (ppf(u) -> valeurs numériques) — rapide, pas de
+    # CoolProp ici, on le fait dans le process principal pour ne pas avoir à
+    # pickler les closures ppfs vers les workers.
+    all_tirages: list[dict[str, float]] = []
     for i in range(n):
         tirage = dict(fixes)
         for j, nom in enumerate(noms):
             tirage[nom] = float(ppfs[j](float(u[i, j])))
+        all_tirages.append(tirage)
 
-        out = run_cycle(tirage, cible_kW=cible_kW)
+    collected: dict[str, list[float]] = {s: [] for s in sorties_suivies}
+    tirages_bruts: list[dict[str, float]] = []
+    n_rejets = 0
 
-        if not out.get("physically_valid", False):
-            n_rejets += 1
-        else:
-            ligne: dict[str, float] = {nom: tirage[nom] for nom in noms}
+    if n >= PARALLEL_THRESHOLD and MAX_WORKERS > 1:
+        # Répartition multi-process (CPU-bound : le GIL interdit tout gain
+        # réel via des threads, chaque tirage est indépendant des autres).
+        n_chunks = min(n, max(MAX_WORKERS * 4, 40))
+        chunks = _chunked(all_tirages, n_chunks)
+        executor = get_executor()
+        futures = [
+            executor.submit(_run_chunk, chunk, noms, sorties_suivies, cible_kW)
+            for chunk in chunks
+        ]
+        done = 0
+        for chunk, future in zip(chunks, futures):
+            result = future.result()
             for s in sorties_suivies:
-                if s in out and isinstance(out[s], (int, float)):
-                    collected[s].append(float(out[s]))
-                    ligne[s] = float(out[s])
-            tirages_bruts.append(ligne)
-
-        if progress_cb is not None and (i + 1) % step == 0:
-            progress_cb(i + 1, n)
+                collected[s].extend(result["collected"][s])
+            tirages_bruts.extend(result["lignes"])
+            n_rejets += result["n_rejets"]
+            done += len(chunk)
+            if progress_cb is not None:
+                progress_cb(done, n)
+    else:
+        for tirage in all_tirages:
+            out = run_cycle(tirage, cible_kW=cible_kW)
+            if not out.get("physically_valid", False):
+                n_rejets += 1
+            else:
+                ligne: dict[str, float] = {nom: tirage[nom] for nom in noms}
+                for s in sorties_suivies:
+                    if s in out and isinstance(out[s], (int, float)):
+                        collected[s].append(float(out[s]))
+                        ligne[s] = float(out[s])
+                tirages_bruts.append(ligne)
 
     if progress_cb is not None:
         progress_cb(n, n)

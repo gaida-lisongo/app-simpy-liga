@@ -100,33 +100,60 @@ async function run(circuit, body) {
 	s.loading = true;
 	s.error = '';
 	s.progress = 0;
-	let es = null;
+	let es = /** @type {EventSource | null} */ (null);
 	try {
 		const ack = await startRun(circuit, body);
 		const id = ack?.campagne_id;
 		if (!id) throw new Error("Réponse d'ack invalide (campagne_id manquant).");
 
-		await new Promise((resolve, reject) => {
-			es = new EventSource(`/db/campagne/${id}/events`);
-			es.onmessage = (/** @type {MessageEvent} */ e) => {
-				try {
-					const ev = JSON.parse(e.data);
-					if (ev.type === 'progress') {
-						s.progress = ev.pct ?? 0;
-					} else if (ev.type === 'done') {
-						s.result = ev.result;
-						s.progress = 100;
-						persist(circuit, ev.result);
-						resolve();
-					} else if (ev.type === 'error') {
-						reject(new Error(ev.message ?? 'Erreur de simulation.'));
+		await /** @type {Promise<void>} */ (new Promise((resolve, reject) => {
+			let settled = false;
+			let retries = 0;
+			const MAX_RETRIES = 5;
+
+			const connect = () => {
+				const source = (es = new EventSource(`/db/campagne/${id}/events`));
+				source.onopen = () => {
+					retries = 0;
+				};
+				source.onmessage = (/** @type {MessageEvent} */ e) => {
+					try {
+						const ev = JSON.parse(e.data);
+						if (ev.type === 'progress') {
+							s.progress = ev.pct ?? 0;
+						} else if (ev.type === 'done') {
+							settled = true;
+							s.result = ev.result;
+							s.progress = 100;
+							persist(circuit, ev.result);
+							resolve();
+						} else if (ev.type === 'error') {
+							settled = true;
+							reject(new Error(ev.message ?? 'Erreur de simulation.'));
+						}
+					} catch (err) {
+						settled = true;
+						reject(/** @type {Error} */ (err));
 					}
-				} catch (err) {
-					reject(/** @type {Error} */ (err));
-				}
+				};
+				source.onerror = () => {
+					if (settled) return;
+					// readyState CONNECTING : EventSource retente nativement — on laisse faire.
+					if (source.readyState === EventSource.CONNECTING) return;
+					// readyState CLOSED : le navigateur a abandonné, on retente nous-mêmes
+					// (avec le même id — le backend reprend la file Redis là où elle en est).
+					source.close();
+					retries += 1;
+					if (retries > MAX_RETRIES) {
+						settled = true;
+						reject(new Error('Connexion au flux interrompue (délai de reconnexion dépassé).'));
+						return;
+					}
+					setTimeout(connect, Math.min(1000 * retries, 5000));
+				};
 			};
-			es.onerror = () => reject(new Error('Connexion au flux interrompue.'));
-		});
+			connect();
+		}));
 	} catch (/** @type {any} */ e) {
 		s.error = e?.message ?? 'Erreur lors de la campagne.';
 	} finally {

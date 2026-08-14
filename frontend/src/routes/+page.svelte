@@ -12,25 +12,28 @@
 	let dash = $state(/** @type {any} */ (null));
 	let bilans = $state(/** @type {Record<string, { bilan: any, statistiques: any }>} */ ({}));
 
-	/** @param {boolean} [force] Ignore le cache Redis et relance les campagnes de synthèse. */
+	/**
+	 * @param {boolean} [force] Ignore le cache Redis et relance les campagnes de synthèse.
+	 * Au montage (force=false), on ne fait QUE lire le cache Redis — jamais de campagne
+	 * automatique. Le lancement des 4 campagnes (long, bloquant) n'a lieu que sur action
+	 * explicite de l'utilisateur (bouton "Générer"/"Rafraîchir").
+	 */
 	async function load(force = false) {
 		loading = true;
 		error = '';
 		try {
 			if (!force) {
 				const cached = await fetch('/db/dashboard').then((r) => r.json());
-				if (cached) {
-					dash = cached;
-				}
+				if (cached) dash = cached;
+				loadBilans();
+				return;
 			}
-			if (!dash || force) {
-				dash = await getDashboard();
-				fetch('/db/dashboard', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify(dash)
-				}).catch(() => {});
-			}
+			dash = await getDashboard();
+			fetch('/db/dashboard', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(dash)
+			}).catch(() => {});
 			// Bilan énergétique par circuit — depuis les dernières campagnes persistées (Redis).
 			loadBilans();
 		} catch (/** @type {any} */ e) {
@@ -136,20 +139,29 @@
 			{/if}
 		</Button>
 		<Button variant="secondary" onclick={() => load(true)} disabled={loading}>
-			{loading ? 'Campagne en cours…' : 'Rafraîchir'}
+			{loading ? 'Campagne en cours…' : dash ? 'Rafraîchir' : 'Générer la synthèse'}
 		</Button>
 	</div>
 </header>
 
-{#if loading && !dash}
+{#if loading}
 	<div class="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-8 text-center">
 		<p class="text-sm text-[var(--text-secondary)]">
-			Campagnes de synthèse en cours sur les 4 circuits (LHS, 500 tirages chacune) — cela peut
-			prendre jusqu'à quelques minutes.
+			{dash
+				? 'Chargement du cache…'
+				: 'Campagnes de synthèse en cours sur les 4 circuits (LHS, 500 tirages chacune) — cela peut prendre jusqu\'à quelques minutes.'}
 		</p>
 	</div>
 {:else if error}
 	<p class="text-sm text-[var(--critical)]">{error}</p>
+{:else if !dash}
+	<div class="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-8 text-center">
+		<p class="mb-4 text-sm text-[var(--text-secondary)]">
+			Aucune synthèse en cache pour le moment. Lancez les campagnes sur les 4 circuits pour
+			alimenter ce dashboard.
+		</p>
+		<Button variant="secondary" onclick={() => load(true)}>Générer la synthèse</Button>
+	</div>
 {:else if dash}
 	<section class="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
 		<KpiCard label="COP moyen (4 circuits)" value={fmt(copMoyen)} sub="Coefficient de performance" />
