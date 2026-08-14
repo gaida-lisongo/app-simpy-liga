@@ -90,7 +90,7 @@ def test_dashboard(monkeypatch):
 # --------------------------------------------------------------------------- #
 #  Tests du circuit solaire (A4) — couplage G/eta_col/A_col, STR, enrichissements
 # --------------------------------------------------------------------------- #
-_SOLAR_SORTIES = ["Q_utile", "eta_th", "STR", "m_dot_pri", "eta_ex"]
+_SOLAR_SORTIES = ["Q_utile", "eta_th", "STR", "m_dot_pri", "eta_ex", "COP"]
 
 
 def test_solaire_sigma_non_nul():
@@ -101,6 +101,7 @@ def test_solaire_sigma_non_nul():
     assert stats["STR"].ecart_type > 0.01,    "STR constant — bug couplage solaire"
     assert stats["Q_utile"].ecart_type > 1.0, "Q_utile constant — bug couplage"
     assert stats["eta_th"].ecart_type > 0.01, "eta_th constant — bug couplage"
+    assert stats["COP"].ecart_type > 0.0,     "COP constant — cycle non couplé (A6)"
 
 
 def test_solaire_STR_definition():
@@ -113,6 +114,46 @@ def test_solaire_STR_definition():
     assert 0.05 < str_moy < 2.0, f"STR hors plage physique : {str_moy}"
     cop_implique = str_moy / eta_th_moy if eta_th_moy > 0 else 0
     assert 0.1 < cop_implique < 3.0, f"COP implicite incohérent : {cop_implique}"
+    # Garde de régression : STR ne doit pas pouvoir passer les bornes ci-dessus
+    # avec un COP silencieusement constant (c'était le cas avant A6/Voie B,
+    # quand le cycle tournait à T_g/T_e/T_c figés).
+    assert stats["COP"].ecart_type > 0.0, "COP constant — STR ne reflète pas le couplage réel"
+
+
+def test_solaire_m_dot_pri_realiste():
+    """
+    A1 : m_dot_pri doit utiliser les vraies enthalpies du cycle résolu (états 7/8),
+    pas une re-saturation à P_gen qui ne capterait que la chaleur latente et
+    omettrait le préchauffage sensible réel (~35°C -> 95°C) fourni par le générateur.
+    """
+    from app.adapters.physics_adapter import run_cycle
+
+    nominal = {
+        "G": 800.0, "eta_col": 0.68, "T_0": 25.0, "A_col": 85.0, "phi_s": 0.10,
+        "T_g": 95.0, "T_e": 8.0, "T_c": 35.0,
+        "eta_is_p": 0.75, "eta_n": 0.92, "eta_d": 0.85, "eta_m": 1.00,
+    }
+    out = run_cycle(nominal, cible_kW=12.0, include_states=True)
+    assert out["physically_valid"], out.get("error")
+
+    par_point = {s["point"]: s for s in out["states"]}
+    h_7 = par_point["7"]["h"]  # kJ/kg
+    h_8 = par_point["8"]["h"]  # kJ/kg
+    delta_h_reel = h_8 - h_7
+
+    # Chaleur latente seule à P_gen (l'ancien bug) est ~2260-2270 kJ/kg pour l'eau à 95°C.
+    # Le vrai Δh doit être strictement supérieur car il inclut le préchauffage sensible
+    # entre la sortie pompe (proche de T_cond) et la vapeur saturée à T_gen.
+    assert delta_h_reel > 2300.0, (
+        f"Δh implicite ({delta_h_reel:.1f} kJ/kg) ne semble pas inclure le "
+        f"préchauffage sensible — A1 non corrigé ?"
+    )
+
+    Q_utile = out["Q_utile"]
+    m_dot_pri_attendu = Q_utile / delta_h_reel
+    assert abs(out["m_dot_pri"] - m_dot_pri_attendu) < 1e-4, (
+        f"m_dot_pri ({out['m_dot_pri']}) != Q_utile/Δh_reel ({m_dot_pri_attendu})"
+    )
 
 
 def test_solaire_mode_inverse_preserve():
@@ -141,6 +182,18 @@ def test_solaire_enrichissements():
     assert len(cc.G_range) == len(cc.eta_th_vs_G) == 50
     assert len(cc.T_gen_range) == len(cc.STR_vs_Tgen) == 30
 
+    # A2 : la courbe STR=f(T_gen) doit être ancrée sur le vrai COP nominal résolu
+    # (resultats.bilan_energetique.COP), pas sur le littéral déconnecté cop_ref=0.35.
+    bilan = resultats.bilan_energetique
+    assert bilan is not None and bilan.COP is not None
+    idx_95 = min(range(len(cc.T_gen_range)), key=lambda i: abs(cc.T_gen_range[i] - 95.0))
+    eta_th_nom = cc.eta_th_vs_G[0]
+    str_attendu_95 = bilan.COP * eta_th_nom
+    assert abs(cc.STR_vs_Tgen[idx_95] - str_attendu_95) < 0.05, (
+        f"courbes_cpc.STR_vs_Tgen ne reflète pas le COP nominal réel "
+        f"({cc.STR_vs_Tgen[idx_95]} vs attendu {str_attendu_95})"
+    )
+
 
 def test_solaire_params_corrects():
     """Vérifie que les bornes du catalogue solaire sont conformes à la référence A4."""
@@ -158,3 +211,23 @@ def test_solaire_params_corrects():
 
     assert "phi_s" in params
     assert params["T_0"]["sigma"] == 3
+
+    # A6/Voie B — couplage réel : le cycle R718 solaire tire T_g/T_e/T_c et
+    # les rendements comme les circuits moteur/frigorifique/couplage.
+    assert params["T_g"]["min"] == 80
+    assert params["T_g"]["mode"] == 95
+    assert params["T_g"]["max"] == 110
+
+    assert params["T_e"]["min"] == 5
+    assert params["T_e"]["mode"] == 8
+    assert params["T_e"]["max"] == 12
+
+    assert params["T_c"]["min"] == 28
+    assert params["T_c"]["mode"] == 35
+    assert params["T_c"]["max"] == 45
+
+    assert params["eta_is_p"]["min"] == 0.65
+    assert params["eta_is_p"]["max"] == 0.85
+
+    for nom in ("eta_n", "eta_d", "eta_m"):
+        assert nom in params, f"{nom} manquant du catalogue solaire"

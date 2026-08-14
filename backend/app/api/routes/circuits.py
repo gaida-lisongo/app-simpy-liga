@@ -20,10 +20,12 @@ from fastapi import APIRouter, HTTPException
 from app.schemas.reporting import (
     Circuit, CampagneRequest, ReportingResponse,
     MetaArticle, SimulationConfig, Cible,
+    FiabiliteRequest, FiabiliteResponse,
 )
 from app.core.catalogue import get_default_config, META, PERIMETRES, PARAMETRES
 from app.engine.monte_carlo import run_campaign
 from app.engine import runner
+from app.engine.fiabilite import compute_fiabilite
 from app.adapters.physics_adapter import core_is_real
 
 router = APIRouter(prefix="/api", tags=["circuits"])
@@ -33,7 +35,7 @@ SORTIES: dict[Circuit, list[str]] = {
     Circuit.moteur:       ["COP", "mu", "m_dot_pri", "Q_gen",  "eta_ex"],
     Circuit.frigorifique: ["COP", "mu", "m_dot_pri", "m_dot_sec", "eta_ex"],
     Circuit.couplage:     ["COP", "mu", "Q_gen",     "eta_ex"],
-    Circuit.solaire:      ["Q_utile", "eta_th", "STR", "m_dot_pri", "eta_ex"],
+    Circuit.solaire:      ["Q_utile", "eta_th", "STR", "m_dot_pri", "eta_ex", "COP"],
 }
 
 _CIBLE_DEFAUT = Cible(grandeur="Q_e", valeur=12.0, unite="kW", tol_pct=5.0)
@@ -86,6 +88,19 @@ def run(circuit: Circuit, req: CampagneRequest | None = None) -> dict:
         sorties = req.sorties_suivies or SORTIES[circuit]
 
     return runner.start_run(circuit, params, sim, sorties)
+
+
+@router.post("/{circuit}/fiabilite", response_model=FiabiliteResponse)
+def fiabilite(circuit: Circuit, req: FiabiliteRequest) -> FiabiliteResponse:
+    """
+    Fiabilité (M2) : probabilité que `grandeur` satisfasse `seuil` sur des
+    tirages déjà obtenus (resultats.tirages d'une campagne), avec IC95 exact
+    (Clopper-Pearson). Pas de nouvelle simulation — calcul synchrone.
+
+    `circuit` n'est utilisé que pour la cohérence de route ; le calcul est
+    générique (agnostique du circuit d'origine des tirages).
+    """
+    return compute_fiabilite(req)
 
 
 @router.get("/dashboard")

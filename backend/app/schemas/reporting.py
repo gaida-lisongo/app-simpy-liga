@@ -114,6 +114,27 @@ class Convergence(BaseModel):
     stabilise: Optional[bool] = None
 
 
+class FiabiliteRequest(BaseModel):
+    """Requête de calcul de fiabilité (M2) — à partir de tirages déjà obtenus."""
+    grandeur: str = Field(..., description="Clé de sortie à évaluer, ex. 'STR'")
+    seuil: float = Field(..., description="Seuil de succès")
+    sens: str = Field("gte", description="'gte' (>= seuil) ou 'lte' (<= seuil)")
+    tirages: list[dict[str, float]] = Field(
+        ..., description="Tirages bruts déjà obtenus (resultats.tirages d'une campagne).")
+
+
+class FiabiliteResponse(BaseModel):
+    """Probabilité de succès + IC95 exact (Clopper-Pearson)."""
+    grandeur: str
+    seuil: float
+    sens: str
+    n_total: int
+    n_succes: int
+    p_hat: float
+    IC95: list[float]
+    methode: str = "Clopper-Pearson"
+
+
 class TestStatistique(BaseModel):
     """Résultat d'un test statistique (p-value + interprétation)."""
     test: str

@@ -27,6 +27,7 @@ def run_campaign(
     config: SimulationConfig,
     sorties_suivies: list[str],
     progress_cb: Optional[Callable[[int, int], None]] = None,
+    N_sobol: Optional[int] = None,
 ) -> tuple[Resultats, dict]:
     """
     Campagne Monte Carlo — dimensionnement inverse stochastique.
@@ -35,6 +36,12 @@ def run_campaign(
     2. Pour chaque tirage : run_cycle() → inverse 12 kW
     3. Filtrage des tirages non physiques
     4. Analyse statistique des sorties
+
+    N_sobol : si fourni (M1), calcule aussi les indices de Sobol (Saltelli,
+    SALib) via un échantillonnage dédié de N_sobol*(d+2) appels solveur,
+    indépendant de N_iterations. None (défaut) = pas de calcul Sobol — évite
+    de ralentir les appels directs à run_campaign() (tests, campagnes rapides)
+    qui n'en ont pas besoin.
 
     Returns:
         (Resultats, raw_arrays)
@@ -120,7 +127,8 @@ def run_campaign(
         resultats.profil_tube = ProfilTube(**compute_profil_tube(_Q_utile))
         resultats.courbes_cpc = CourbesCPC(**compute_courbes_cpc(
             eta_col_nom=_nom.get("eta_col", 0.68),
-            phi_s_nom=_nom.get("phi_s", 0.10)))
+            phi_s_nom=_nom.get("phi_s", 0.10),
+            cop_ref=ref.get("COP", 0.35) if ref.get("physically_valid", False) else 0.35))
         resultats.sankey_solaire = SankeySolaire(
             **compute_sankey_solaire(_Q_sol, _Q_opt, _Q_utile))
 
@@ -142,13 +150,41 @@ def run_campaign(
             maximum=float(np.max(arr)),
         )
 
-    # Étude de convergence sur la sortie principale
-    principal = sorties_suivies[0] if sorties_suivies else None
-    if principal and raw.get(principal, np.array([])).size > 50:
-        resultats.convergence = _convergence(raw[principal])
+    # Étude de convergence — pire cas sur toutes les sorties suivies (pas
+    # seulement sorties_suivies[0], qui n'est pas garanti être la plus lente
+    # à converger : c'est un ordre de liste arbitraire, cf. A4).
+    convergences = {
+        s: _convergence(raw[s])
+        for s in sorties_suivies
+        if raw.get(s, np.array([])).size > 50
+    }
+    if convergences:
+        non_stabilisees = [c for c in convergences.values() if not c.stabilise]
+        resultats.convergence = (
+            non_stabilisees[0] if non_stabilisees
+            else max(convergences.values(), key=lambda c: c.N_stable or 0)
+        )
 
     resultats.taux_rejet_non_physique_pct = round(100.0 * n_rejets / max(n, 1), 3)
+
+    if N_sobol:
+        from app.engine.sensitivity import compute_sobol
+        resultats.sensibilite_sobol = compute_sobol(
+            params, sorties_suivies, cible_kW, N_sobol=N_sobol)
+
     return resultats, raw
+
+
+def _premier_index_stable(sous_tol: np.ndarray) -> Optional[int]:
+    """
+    Premier indice à partir duquel TOUT le reste de `sous_tol` est True
+    (stabilité soutenue), pas le premier True isolé (qui peut être suivi
+    d'une re-divergence — A4).
+    """
+    for i in range(len(sous_tol)):
+        if sous_tol[i:].all():
+            return i
+    return None
 
 
 def _convergence(arr: np.ndarray, tol: float = 0.01) -> Convergence:
@@ -157,6 +193,6 @@ def _convergence(arr: np.ndarray, tol: float = 0.01) -> Convergence:
     moyennes = np.array([arr[:k].mean() for k in grille])
     ref    = moyennes[-1]
     rel    = np.abs(moyennes - ref) / (abs(ref) + 1e-12)
-    stables = grille[rel < tol]
-    N_stable = int(stables[0]) if stables.size else None
+    idx    = _premier_index_stable(rel < tol)
+    N_stable = int(grille[idx]) if idx is not None else None
     return Convergence(N_stable=N_stable, stabilise=N_stable is not None)

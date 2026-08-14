@@ -11,7 +11,7 @@
 	import SolaireProfilTube from '$lib/components/solaire/SolaireProfilTube.svelte';
 	import SolaireCourbesCPC from '$lib/components/solaire/SolaireCourbesCPC.svelte';
 	import SolaireSankey from '$lib/components/solaire/SolaireSankey.svelte';
-	import SolaireDonneesBrutes from '$lib/components/solaire/SolaireDonneesBrutes.svelte';
+	import RawDataTable from '$lib/components/RawDataTable.svelte';
 	import McDonutChart from '$lib/components/McDonutChart.svelte';
 	import DensityTabs from '$lib/components/DensityTabs.svelte';
 	import HistorySelector from '$lib/components/HistorySelector.svelte';
@@ -128,7 +128,7 @@
 		</section>
 
 		<section class="mb-6">
-			<SolaireDonneesBrutes {tirages} campagneId={st.result.campagne_id} />
+			<RawDataTable {tirages} campagneId={st.result.campagne_id} />
 		</section>
 	{:else}
 		<div class="mb-6 flex flex-col items-center gap-4 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] p-10 text-center">

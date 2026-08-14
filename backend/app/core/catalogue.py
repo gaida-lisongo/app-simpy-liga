@@ -95,6 +95,15 @@ PARAMETRES: dict[Circuit, list[ParametreIncertain]] = {
         _nor("T_0",     "T_0",     "degC",  25,  3,  source="contexte_RDC"),
         _uni("A_col",   "A_col",   "m2",    70, 100,  source="memoire_eq7.14"),
         _uni("phi_s",   "phi_s",   "-",   0.05, 0.15, source="Al-akayshee2026"),
+        # Couplage réel (A6/Voie B) — mêmes lois que moteur/frigorifique/couplage,
+        # pour que le sous-cycle R718 tourne à des conditions tirées, pas figées.
+        _tri("T_g",       "T_g",       "degC", 80,   95,   110),
+        _tri("T_e",       "T_e",       "degC",  5,    8,    12),
+        _tri("T_c",       "T_c",       "degC", 28,   35,    45),
+        _uni("eta_is_p",  "eta_is,p",  "-",    0.65, 0.85),
+        _tri("eta_n",     "eta_n",     "-",    0.85, 0.92,  0.95),
+        _tri("eta_d",     "eta_d",     "-",    0.75, 0.85,  0.90),
+        _tri("eta_m",     "eta_m",     "-",    0.75, 0.85,  0.95),
     ],
 }
 

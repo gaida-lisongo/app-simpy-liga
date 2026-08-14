@@ -17,6 +17,7 @@ import threading
 from datetime import datetime, timezone
 
 from app.engine.monte_carlo import run_campaign
+from app.engine.sensitivity import N_SOBOL_DEFAUT
 from app.schemas.reporting import ReportingResponse, MetaArticle
 from app.core.catalogue import META, PERIMETRES
 from app.core import upstash
@@ -59,7 +60,8 @@ def start_run(circuit, params, sim, sorties) -> dict:
 
     def worker() -> None:
         try:
-            resultats, _ = run_campaign(params, sim, sorties, progress_cb=progress_cb)
+            resultats, _ = run_campaign(params, sim, sorties, progress_cb=progress_cb,
+                                        N_sobol=N_SOBOL_DEFAUT)
             cible_v = sim.cible.valeur if sim.cible else 12.0
             resp = ReportingResponse(
                 article=MetaArticle(circuit=circuit, **META[circuit]),

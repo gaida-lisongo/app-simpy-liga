@@ -16,7 +16,6 @@ Auteur : Projet Thèse R718 — SimpyLIGA
 from __future__ import annotations
 import math
 from app.physics.modules.system.model import SystemCycleModel, CycleResult
-from app.physics.core.props_service import get_props_service
 
 _cycle_model = SystemCycleModel()
 
@@ -27,14 +26,52 @@ def core_is_real() -> bool:
     return True
 
 
+def _solve_cycle_from_params(params: dict, cible_kW: float):
+    """
+    Lit T_g/T_e/T_c/eta_is_p/eta_n/eta_d/eta_m depuis params (mêmes défauts et
+    validations pour tous les circuits, y compris solaire depuis A6/Voie B) et
+    résout le cycle R718 en mode inverse (Q_evap = cible_kW imposée).
+
+    Returns:
+        (CycleResult, None) si succès, (None, error_dict) sinon.
+    """
+    T_g      = params.get("T_g",      95.0) + 273.15
+    T_e      = params.get("T_e",       8.0) + 273.15
+    T_c      = params.get("T_c",      35.0) + 273.15
+    eta_is_p = params.get("eta_is_p", 0.75)
+    eta_n    = params.get("eta_n",    0.92)
+    eta_d    = params.get("eta_d",    0.85)
+    eta_m    = params.get("eta_m",    1.00)
+
+    if not (T_e < T_c < T_g):
+        return None, {"physically_valid": False,
+                       "error": f"Ordre T non physique: Te={T_e:.1f} Tc={T_c:.1f} Tg={T_g:.1f}"}
+    if not all(0 < e <= 1 for e in [eta_is_p, eta_n, eta_d, eta_m]):
+        return None, {"physically_valid": False, "error": "Rendement hors (0,1]"}
+
+    try:
+        cr: CycleResult = _cycle_model.solve_cycle(
+            T_gen=T_g, T_evap=T_e, T_cond=T_c,
+            Q_evap_target=cible_kW,
+            eta_pump=eta_is_p, eta_nozzle=eta_n,
+            eta_diffuser=eta_d, eta_mixing=eta_m,
+            use_ejector_v2=True,
+        )
+    except Exception as e:
+        return None, {"physically_valid": False, "error": str(e)}
+
+    return cr, None
+
+
 def _run_cycle_solaire(params: dict, cible_kW: float = 12.0,
                        include_states: bool = False) -> dict:
     """
     Sous-modèle circuit solaire (A4) — MODE INVERSE PRÉSERVÉ.
 
     Les paramètres G, eta_col, A_col, T_0, phi_s déterminent Q_utile.
-    Le cycle R718 tourne aux conditions nominales (T_g=95°C, T_e=8°C, T_c=35°C)
-    pour obtenir COP_ref et h_8 − h_7 via CoolProp.
+    Le cycle R718 (T_g, T_e, T_c, rendements) est désormais couplé réellement
+    (A6/Voie B) : tiré du même catalogue que moteur/frigorifique/couplage,
+    plus figé aux conditions nominales.
 
     PRINCIPE FONDAMENTAL : Q_evap reste imposée à 12 kW. Le mode inverse
     n'est PAS abandonné. m_dot_pri est une SORTIE calculée depuis Q_utile,
@@ -45,8 +82,6 @@ def _run_cycle_solaire(params: dict, cible_kW: float = 12.0,
 
     Sorties : Q_utile, Q_sol, Q_opt, eta_th, STR, m_dot_pri, eta_ex.
     """
-    props = get_props_service()
-
     G       = params.get("G",       800.0)
     eta_col = params.get("eta_col",  0.68)
     A_col   = params.get("A_col",   85.0)
@@ -71,20 +106,11 @@ def _run_cycle_solaire(params: dict, cible_kW: float = 12.0,
     if Q_utile <= 0:
         return {"physically_valid": False, "error": "Q_utile ≤ 0"}
 
-    T_g_K = 95.0 + 273.15
-    T_e_K =  8.0 + 273.15
-    T_c_K = 35.0 + 273.15
+    T_g_K = params.get("T_g", 95.0) + 273.15
 
-    try:
-        cr: CycleResult = _cycle_model.solve_cycle(
-            T_gen=T_g_K, T_evap=T_e_K, T_cond=T_c_K,
-            Q_evap_target=cible_kW,
-            eta_pump=0.75, eta_nozzle=0.92,
-            eta_diffuser=0.85, eta_mixing=1.00,
-            use_ejector_v2=True,
-        )
-    except Exception as e:
-        return {"physically_valid": False, "error": str(e)}
+    cr, err = _solve_cycle_from_params(params, cible_kW)
+    if err is not None:
+        return err
 
     m   = cr.metrics
     cop = m.get("COP", 0.0)
@@ -93,9 +119,12 @@ def _run_cycle_solaire(params: dict, cible_kW: float = 12.0,
     if not (cr.flags.get("success", False) and cop > 0 and mu > 0):
         return {"physically_valid": False, "error": "Cycle de référence invalide"}
 
-    P_gen   = props.Psat_T(T_g_K)
-    h_8     = props.hv_P(P_gen)
-    h_7     = props.hl_P(P_gen)
+    # A1 (corrigé) : vraies enthalpies du cycle résolu — pas une re-saturation
+    # à P_gen qui ne capterait que la chaleur latente et omettrait le
+    # préchauffage sensible réel entre la sortie pompe (état 7) et la
+    # vapeur saturée en sortie générateur (état 8).
+    h_7 = cr.states[7].h
+    h_8 = cr.states[8].h
     delta_h = (h_8 - h_7) / 1000.0
 
     m_dot_pri = Q_utile / delta_h if delta_h > 0 else 0.0
@@ -145,30 +174,13 @@ def run_cycle(params: dict, cible_kW: float = 12.0,
         return _run_cycle_solaire(params, cible_kW=cible_kW,
                                   include_states=include_states)
 
-    T_g      = params.get("T_g",      95.0) + 273.15
-    T_e      = params.get("T_e",       8.0) + 273.15
-    T_c      = params.get("T_c",      35.0) + 273.15
-    eta_is_p = params.get("eta_is_p", 0.75)
-    eta_n    = params.get("eta_n",    0.92)
-    eta_d    = params.get("eta_d",    0.85)
-    eta_m    = params.get("eta_m",    1.00)
+    T_g = params.get("T_g", 95.0) + 273.15
+    T_c = params.get("T_c", 35.0) + 273.15
+    T_e = params.get("T_e",  8.0) + 273.15
 
-    if not (T_e < T_c < T_g):
-        return {"physically_valid": False,
-                "error": f"Ordre T non physique: Te={T_e:.1f} Tc={T_c:.1f} Tg={T_g:.1f}"}
-    if not all(0 < e <= 1 for e in [eta_is_p, eta_n, eta_d, eta_m]):
-        return {"physically_valid": False, "error": "Rendement hors (0,1]"}
-
-    try:
-        cr: CycleResult = _cycle_model.solve_cycle(
-            T_gen=T_g, T_evap=T_e, T_cond=T_c,
-            Q_evap_target=cible_kW,
-            eta_pump=eta_is_p, eta_nozzle=eta_n,
-            eta_diffuser=eta_d, eta_mixing=eta_m,
-            use_ejector_v2=True,
-        )
-    except Exception as e:
-        return {"physically_valid": False, "error": str(e)}
+    cr, err = _solve_cycle_from_params(params, cible_kW)
+    if err is not None:
+        return err
 
     m      = cr.metrics
     cop    = m.get("COP",     0.0)
