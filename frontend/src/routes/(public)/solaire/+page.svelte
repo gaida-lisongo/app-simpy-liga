@@ -57,16 +57,41 @@
 			await simulationStore.run('solaire', {
 				circuit: 'solaire',
 				parametres_incertains: params,
-				simulation: { N_iterations: n, seed, echantillonnage: methode }
+				simulation: { N_iterations: n, seed, echantillonnage: methode },
+				collecter_etats: true
 			});
 		} catch {
 			// erreur portée par le store
 		}
 	}
 
+	/**
+	 * @param {{ iteration: number, states: any[] }[]} iterations
+	 * @param {number} i @param {'T'|'P'|'h'|'s'|'x'} champ
+	 */
+	function moyenneChamp(iterations, i, champ) {
+		const vals = iterations.map((it) => it.states[i][champ]).filter((v) => typeof v === 'number');
+		return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : undefined;
+	}
+
+	/** @param {{ iteration: number, states: any[] }[]} iterations */
+	function moyenneCycle(iterations) {
+		if (!iterations?.length) return undefined;
+		const nPoints = iterations[0].states.length;
+		return Array.from({ length: nPoints }, (_, i) => ({
+			point: iterations[0].states[i].point,
+			T: moyenneChamp(iterations, i, 'T'),
+			P: moyenneChamp(iterations, i, 'P'),
+			h: moyenneChamp(iterations, i, 'h'),
+			s: moyenneChamp(iterations, i, 's'),
+			x: moyenneChamp(iterations, i, 'x')
+		}));
+	}
+
 	let r = $derived(st.result?.resultats ?? null);
 	let tirages = $derived(r?.tirages ?? []);
-	let etatsCycle = $derived(r?.etats_cycle ?? undefined);
+	let etatsParIteration = $derived(r?.etats_par_iteration ?? []);
+	let etatsCycleMoyen = $derived(moyenneCycle(etatsParIteration));
 	let stats = $derived(r?.statistiques ?? null);
 	let convergence = $derived(r?.convergence ?? null);
 	let tauxRejet = $derived(r?.taux_rejet_non_physique_pct ?? null);
@@ -101,10 +126,10 @@
 		<!-- SECTION 3 — diagramme thermo & état du cycle (50/50) -->
 		<section class="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-stretch">
 			<div class="flex min-h-[420px] flex-col">
-				<SolaireDiagramme etats={etatsCycle} />
+				<SolaireDiagramme etats={etatsCycleMoyen} />
 			</div>
 			<div class="flex min-h-[420px] flex-col">
-				<SolaireEtatCycle etats={etatsCycle} />
+				<SolaireEtatCycle etats={etatsCycleMoyen} etatsParIteration={etatsParIteration} />
 			</div>
 		</section>
 
