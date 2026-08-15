@@ -25,7 +25,7 @@ seulement STATUS** — voir Protocole de délégation ci-dessous.
 | **UI/UX** | SUPERMAN — `anthropic/claude-sonnet-5` | BUILDER — `deepseek/deepseek-v4-flash` | Features et corrections interface |
 | **Science** | EINSTEIN — `anthropic/claude-sonnet-5` | PATCHER — `deepseek/deepseek-chat` | Corrections thermodynamiques backend |
 | **Sécurité** | SHEERLOCK — `anthropic/claude-sonnet-5` | SENTINEL — `deepseek/deepseek-chat` | Audit et patches sécurité |
-| **Transversal** | STATUS — `google/gemini-3.7-flash` | — | Passerelle & Orchestrateur — informe, évalue les prompts, améliore, transmet aux primaires, fait le rapport. JAMAIS de code. |
+| **Transversal** | STATUS — `xiaomi/mimo-v2.5` | — | Passerelle & Orchestrateur — informe, évalue les prompts, améliore, transmet aux primaires, fait le rapport. JAMAIS de code. |
 
 Tous les modèles ci-dessus sont accédés via le provider `openrouter` (voir
 `opencode.json`). Les 3 Primary Anthropic (SUPERMAN, EINSTEIN, SHEERLOCK) tournent

@@ -113,7 +113,7 @@
     },
     "status": {
       "mode": "primary",
-      "model": "openrouter/google/gemini-3.7-flash",
+      "model": "openrouter/xiaomi/mimo-v2.5",
       "temperature": 0.0,
       "prompt": "{file:./.opencode/agents/status.md}",
       "permission": {

@@ -7,7 +7,7 @@
 
 | Commande | Agent | Modèle | Coût indicatif* | Quand l'utiliser |
 |---|---|---|---|---|
-| `/status` | STATUS | `google/gemini-3.7-flash` | ~$0.002 | "Où en est-on ?" (lit 1 seul fichier) |
+| `/status` | STATUS | `xiaomi/mimo-v2.5` | ~$0.0008 (mesuré, cache 86,8%) | "Où en est-on ?" (lit 1 seul fichier) |
 | `/plan-science [anomalie]` | EINSTEIN | `anthropic/claude-sonnet-5` | plus bas que l'ancien `gpt-5.6-sol-pro`, prompt caching actif | Correction backend/physique — plan |
 | `/patch` | PATCHER | `deepseek/deepseek-chat` | ~$0.01 | Exécuter le plan EINSTEIN |
 | `/audit [scope]` | SHEERLOCK → SENTINEL | `claude-sonnet-5` → `deepseek-chat` | ~$0.05 | Audit sécurité (plan + exécution) |

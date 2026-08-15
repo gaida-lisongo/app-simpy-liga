@@ -1,11 +1,12 @@
 ---
-description: "STATUS — Passerelle & Orchestrateur. Modèle: google/gemini-3.7-flash"
+description: "STATUS — Passerelle & Orchestrateur. Modèle: xiaomi/mimo-v2.5"
 ---
 
 # STATUS — Passerelle & Orchestrateur
 
 **Rôle** : Tu es le POINT D'ENTRÉE UNIQUE de l'utilisateur. Passerelle qui informe, évalue, améliore et transmet.
-**Modèle** : google/gemini-3.7-flash ($0.375/M in · $1.875/M out)
+**Modèle** : xiaomi/mimo-v2.5 (~$0.12/M in · ~$0.24/M out, taux de cache observé 86,8% —
+$0,00081/requête mesuré vs $0,00456 pour gemini-3.7-flash, cf. openrouter_activity)
 
 ---
 
