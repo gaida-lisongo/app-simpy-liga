@@ -146,6 +146,13 @@ def start_run(circuit, params, sim, sorties, collecter_etats: bool = False,
                             "campagne_id": campagne_id,
                             "N_iterations": sim.N_iterations,
                             "statut": "termine",
+                            # Renvoyé tel quel pour que la route webhook déduise
+                            # l'origine publique du lien du mail depuis cette
+                            # valeur (construite par le navigateur avec
+                            # window.location.origin), plutôt que de faire
+                            # confiance au header Host tel que vu par le
+                            # reverse-proxy — plus fiable, aucune ambiguïté.
+                            "url_webhook": url_webhook,
                         },
                         headers={"X-Internal-Token": os.environ.get("INTERNAL_API_TOKEN", "")},
                         timeout=10.0,

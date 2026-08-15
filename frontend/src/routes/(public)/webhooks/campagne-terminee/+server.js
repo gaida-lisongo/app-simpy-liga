@@ -22,7 +22,11 @@ export async function POST({ request }) {
 	const nom = body?.nom ?? '';
 	const circuit = body?.circuit ?? '';
 	const campagneId = body?.campagne_id ?? '';
-	const lien = `${new URL(request.url).origin}/${circuit}`;
+	// Origine dérivée de url_webhook (construite côté navigateur avec
+	// window.location.origin, donc toujours correcte) plutôt que de request.url
+	// (dépendrait de la fidélité du header Host transmis par le reverse-proxy).
+	const origin = body?.url_webhook ? new URL(body.url_webhook).origin : new URL(request.url).origin;
+	const lien = `${origin}/${circuit}`;
 
 	try {
 		await sendMail({
