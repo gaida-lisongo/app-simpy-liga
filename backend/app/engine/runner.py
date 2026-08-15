@@ -17,8 +17,11 @@ from __future__ import annotations
 
 import copy
 import logging
+import os
 import threading
 from datetime import datetime, timezone
+
+import httpx
 
 from app.engine.monte_carlo import run_campaign
 from app.engine.sensitivity import N_SOBOL_DEFAUT
@@ -37,7 +40,9 @@ def _now() -> str:
     return datetime.now(timezone.utc).strftime("camp_%Y%m%dT%H%M%SZ")
 
 
-def start_run(circuit, params, sim, sorties, collecter_etats: bool = False) -> dict:
+def start_run(circuit, params, sim, sorties, collecter_etats: bool = False,
+              email: str | None = None, nom: str | None = None,
+              url_webhook: str | None = None) -> dict:
     """
     Lance la campagne en arrière-plan et renvoie un ack immédiat.
 
@@ -49,6 +54,12 @@ def start_run(circuit, params, sim, sorties, collecter_etats: bool = False) -> d
         collecter_etats : bool — collecte les états thermodynamiques par tirage
                           (bilan exergétique). Coûteux (~×8 mémoire) — désactivé
                           par défaut.
+        email, nom, url_webhook : si email ET url_webhook sont fournis, un
+                          webhook POST est appelé à la fin de la campagne (avec
+                          X-Internal-Token) pour déclencher une notification —
+                          voir frontend/.../webhooks/campagne-terminee. Aucun
+                          envoi de mail côté Python : c'est le frontend qui
+                          l'envoie via son infra nodemailer existante.
     Returns:
         dict {campagne_id, statut, channel, N_iterations}
     """
@@ -74,10 +85,17 @@ def start_run(circuit, params, sim, sorties, collecter_etats: bool = False) -> d
                 "pct": round(100.0 * n_done / n_total, 1) if n_total else 0.0,
             })
 
+    def on_etats_chunk(batch: list[dict]) -> None:
+        # Persistance incrémentale : chaque lot d'états part vers Redis dès la
+        # fin de son chunk de calcul, plutôt que d'attendre la fin complète de
+        # la campagne (voir upstash.append_etats_batch).
+        upstash.append_etats_batch(campagne_id, batch)
+
     def worker() -> None:
         try:
             resultats, _ = run_campaign(params, sim, sorties, collecter_etats=collecter_etats,
-                                        progress_cb=progress_cb, N_sobol=N_SOBOL_DEFAUT)
+                                        progress_cb=progress_cb, N_sobol=N_SOBOL_DEFAUT,
+                                        on_etats_chunk=on_etats_chunk)
             cible_v = sim.cible.valeur if sim.cible else 12.0
             resp = ReportingResponse(
                 article=MetaArticle(circuit=circuit, **META[circuit]),
@@ -114,6 +132,29 @@ def start_run(circuit, params, sim, sorties, collecter_etats: bool = False) -> d
                     "type": "error",
                     "message": "Persistance Redis échouée — résultats affichés mais non sauvegardés",
                 })
+
+            # 4. Notification best-effort — n'affecte jamais le résultat de la
+            # campagne (déjà persisté et poussé aux étapes précédentes).
+            if email and url_webhook:
+                try:
+                    httpx.post(
+                        url_webhook,
+                        json={
+                            "email": email,
+                            "nom": nom,
+                            "circuit": circuit.value,
+                            "campagne_id": campagne_id,
+                            "N_iterations": sim.N_iterations,
+                            "statut": "termine",
+                        },
+                        headers={"X-Internal-Token": os.environ.get("INTERNAL_API_TOKEN", "")},
+                        timeout=10.0,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    log.warning(
+                        "Webhook de notification échoué (campagne_id=%s, url=%s) : %s",
+                        campagne_id, url_webhook, exc,
+                    )
 
         except Exception as e:  # noqa: BLE001
             log.exception("Erreur dans le worker de la campagne %s", campagne_id)

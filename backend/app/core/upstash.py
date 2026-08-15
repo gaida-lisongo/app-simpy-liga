@@ -68,6 +68,36 @@ def push_event(campagne_id: str, payload: dict) -> bool:
         return False
 
 
+ETATS_TTL_S = 86400 * 7  # 7 jours — éphémère, comme :tirages
+
+
+def append_etats_batch(campagne_id: str, batch: list[dict]) -> bool:
+    """Ajoute un lot d'états thermodynamiques à la liste Redis de la campagne.
+
+    Best-effort, ne lève jamais — utilisé pour la persistance incrémentale
+    pendant le calcul (runner.py, via le callback on_etats_chunk de
+    run_campaign()) ET par save_campaign() pour le cas non-incrémental
+    (résultats déjà entièrement calculés, ex. appels directs à run_campaign()
+    sans callback). Chaque appel est sa propre requête HTTP, jamais assemblée
+    avec d'autres lots — c'est ce qui évite le 413 Upstash à gros N.
+    """
+    if not available() or not batch:
+        return False
+    key = f"simpy:campagne:{campagne_id}:etats"
+    try:
+        _pipeline([
+            ["RPUSH", key, *[json.dumps(e) for e in batch]],
+            ["EXPIRE", key, ETATS_TTL_S],
+        ])
+        return True
+    except Exception as exc:
+        log.error(
+            "append_etats_batch échoué (campagne_id=%s, taille=%d) : %s",
+            campagne_id, len(batch), exc,
+        )
+        return False
+
+
 def save_campaign(circuit_slug: str, campagne_id: str, response: dict) -> bool:
     """Persiste le résultat complet d'une campagne dans Upstash Redis.
 
@@ -115,7 +145,6 @@ def save_campaign(circuit_slug: str, campagne_id: str, response: dict) -> bool:
     META_TTL_S = 86400 * 30    # 30 jours — les métadonnées suivent le payload
     TIRAGES_TTL_S = 86400 * 7  # 7 jours — les tirages bruts sont éphémères
     ETATS_BATCH_SIZE = 500     # ≈ 375 Ko/lot (8 pts × 5 champs) — large marge de sécurité
-    ETATS_TTL_S = 86400 * 7    # 7 jours — éphémère, comme :tirages
 
     # Construire la métadonnée légère (6 champs)
     meta = {
@@ -164,21 +193,9 @@ def save_campaign(circuit_slug: str, campagne_id: str, response: dict) -> bool:
         )
         return False
 
-    etats_key = f"{camp_key}:etats"
     for i in range(0, len(etats), ETATS_BATCH_SIZE):
         batch = etats[i:i + ETATS_BATCH_SIZE]
-        try:
-            _pipeline([["RPUSH", etats_key, *[json.dumps(e) for e in batch]]])
-        except Exception as exc:
-            log.error(
-                "Lot d'états [%d:%d] échoué pour %s : %s",
-                i, i + len(batch), campagne_id, exc,
-            )
+        if not append_etats_batch(campagne_id, batch):
             break
-    if etats:
-        try:
-            _pipeline([["EXPIRE", etats_key, ETATS_TTL_S]])
-        except Exception:
-            pass
 
     return True

@@ -82,6 +82,7 @@ def run_campaign(
     collecter_etats: bool = False,
     progress_cb: Optional[Callable[[int, int], None]] = None,
     N_sobol: Optional[int] = None,
+    on_etats_chunk: Optional[Callable[[list[dict]], None]] = None,
 ) -> tuple[Resultats, dict]:
     """
     Campagne Monte Carlo — dimensionnement inverse stochastique.
@@ -96,6 +97,13 @@ def run_campaign(
     indépendant de N_iterations. None (défaut) = pas de calcul Sobol — évite
     de ralentir les appels directs à run_campaign() (tests, campagnes rapides)
     qui n'en ont pas besoin.
+
+    on_etats_chunk : si fourni, chaque lot d'états (déjà rebasé) est poussé à
+    ce callback au fur et à mesure de la fusion des chunks, au lieu d'être
+    accumulé dans resultats.etats_par_iteration — persistance incrémentale
+    pendant le calcul plutôt qu'en un seul bloc à la fin (voir runner.py).
+    Sans callback (défaut), comportement inchangé : tout est accumulé et
+    renvoyé dans resultats.etats_par_iteration.
 
     Returns:
         (Resultats, raw_arrays)
@@ -166,8 +174,15 @@ def run_campaign(
             # préservé par zip(chunks, futures)) : l'index local à chaque
             # chunk doit être rebasé par le nombre de tirages retenus déjà
             # accumulés, sinon plusieurs itérations porteraient le même numéro.
-            for e in result["etats_par_iteration"]:
-                etats_tous.append({"iteration": e["iteration"] + offset, "states": e["states"]})
+            chunk_etats = [
+                {"iteration": e["iteration"] + offset, "states": e["states"]}
+                for e in result["etats_par_iteration"]
+            ]
+            if on_etats_chunk is not None:
+                if chunk_etats:
+                    on_etats_chunk(chunk_etats)
+            else:
+                etats_tous.extend(chunk_etats)
             offset += len(result["lignes"])
             done += len(chunk)
             if progress_cb is not None:
@@ -185,10 +200,11 @@ def run_campaign(
                         ligne[s] = float(out[s])
                 tirages_bruts.append(ligne)
                 if collecter_etats and "states" in out:
-                    etats_tous.append({
-                        "iteration": len(tirages_bruts) - 1,
-                        "states": out["states"],
-                    })
+                    entry = {"iteration": len(tirages_bruts) - 1, "states": out["states"]}
+                    if on_etats_chunk is not None:
+                        on_etats_chunk([entry])
+                    else:
+                        etats_tous.append(entry)
 
     if progress_cb is not None:
         progress_cb(n, total_budget)

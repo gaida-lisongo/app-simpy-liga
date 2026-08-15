@@ -17,6 +17,9 @@
 	import HistorySelector from '$lib/components/HistorySelector.svelte';
 	import { CIRCUITS } from '$lib/constants.js';
 
+	/** @type {{ data: { user: { email: string, nom: string } | null } }} */
+	let { data } = $props();
+
 	let circuit = $derived(CIRCUITS.find((c) => c.slug === 'solaire'));
 	let st = $derived(simulationStore.state.solaire);
 
@@ -54,12 +57,19 @@
 			return;
 		}
 		try {
-			await simulationStore.run('solaire', {
+			/** @type {{ circuit: string, parametres_incertains: any[], simulation: any, collecter_etats: boolean, email?: string, nom?: string, url_webhook?: string }} */
+			const body = {
 				circuit: 'solaire',
 				parametres_incertains: params,
 				simulation: { N_iterations: n, seed, echantillonnage: methode },
 				collecter_etats: true
-			});
+			};
+			if (data.user?.email) {
+				body.email = data.user.email;
+				body.nom = data.user.nom;
+				body.url_webhook = `${window.location.origin}/webhooks/campagne-terminee`;
+			}
+			await simulationStore.run('solaire', body);
 		} catch {
 			// erreur portée par le store
 		}
