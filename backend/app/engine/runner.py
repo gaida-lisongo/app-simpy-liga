@@ -98,6 +98,7 @@ def start_run(circuit, params, sim, sorties, collecter_etats: bool = False) -> d
             done_event = copy.deepcopy(payload_complet)
             if "resultats" in done_event and isinstance(done_event["resultats"], dict):
                 done_event["resultats"]["tirages"] = []
+                done_event["resultats"]["etats_par_iteration"] = []
             done_event["persiste"] = ok
 
             upstash.push_event(campagne_id, {

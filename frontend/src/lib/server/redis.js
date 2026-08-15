@@ -13,6 +13,23 @@ const kCampagne = (/** @type {string} */ id) => `simpy:campagne:${id}`;
 const kSummary = 'simpy:dashboard:summary';
 
 /**
+ * Rattache `resultats.etats_par_iteration` (écrit par lots RPUSH côté backend
+ * dans `simpy:campagne:{id}:etats`) à une campagne déjà lue depuis le blob
+ * principal. Best-effort : une erreur de lecture de la liste n'empêche pas de
+ * renvoyer la campagne (juste sans les états).
+ * @param {string} id @param {any} base
+ */
+async function attacherEtats(id, base) {
+	if (!base) return base;
+	const raw = await redis.lrange(`${kCampagne(id)}:etats`, 0, -1).catch(() => []);
+	if (raw?.length) {
+		base.resultats = base.resultats ?? {};
+		base.resultats.etats_par_iteration = raw.map((e) => (typeof e === 'string' ? JSON.parse(e) : e));
+	}
+	return base;
+}
+
+/**
  * Persiste une campagne : historique + entrée individuelle. Le "latest" est
  * dérivé de la tête de l'historique (LPUSH toujours en tête), DONC il n'y a
  * plus d'écrasement — la cache accumule toutes les campagnes par circuit.
@@ -52,12 +69,14 @@ export async function saveCampagne(circuit, response) {
 export async function getLatest(circuit) {
 	const id = await redis.lindex(kHistory(circuit), 0).catch(() => null);
 	if (!id) return null;
-	return redis.get(kCampagne(id));
+	const base = await redis.get(kCampagne(id));
+	return attacherEtats(id, base);
 }
 
 /** @param {string} id */
-export function getCampagne(id) {
-	return redis.get(kCampagne(id));
+export async function getCampagne(id) {
+	const base = await redis.get(kCampagne(id));
+	return attacherEtats(id, base);
 }
 
 /**
@@ -133,8 +152,9 @@ export async function getRecentCampaigns(circuit, limit = 20) {
  * Récupère une campagne par son id (depuis la cache).
  * @param {string} id
  */
-export function getCampagneById(id) {
-	return redis.get(kCampagne(id));
+export async function getCampagneById(id) {
+	const base = await redis.get(kCampagne(id));
+	return attacherEtats(id, base);
 }
 
 /** Dernière campagne par circuit — pour l'hydratation du store au chargement. */

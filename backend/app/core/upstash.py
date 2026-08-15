@@ -81,8 +81,17 @@ def save_campaign(circuit_slug: str, campagne_id: str, response: dict) -> bool:
       7. LPUSH simpy:circuit:{circuit}:history — id en tête de liste
       8. LTRIM simpy:circuit:{circuit}:history 0 19 — garde les 20 dernières
 
+    Les états thermodynamiques par itération (`resultats.etats_par_iteration`,
+    potentiellement volumineux — jusqu'à ~7,5 Mo à N=10 000) sont retirés de ce
+    payload et écrits séparément, par lots (RPUSH), sous
+    `simpy:campagne:{id}:etats` : le pipeline ci-dessus est atomique, et un
+    payload trop gros le ferait échouer intégralement (413 Upstash), y compris
+    le LPUSH d'historique — la campagne entière serait alors introuvable.
+
     Returns:
-        True si le pipeline a réussi, False sinon.
+        True si le pipeline principal a réussi (les lots d'états sont
+        best-effort : un lot en échec est loggé mais ne fait pas échouer la
+        fonction — le cœur de la campagne est déjà sauvegardé à ce stade).
     """
     if not available():
         log.warning(
@@ -91,6 +100,13 @@ def save_campaign(circuit_slug: str, campagne_id: str, response: dict) -> bool:
         )
         return False
 
+    etats: list = []
+    if "resultats" in response:
+        resultats = dict(response["resultats"])
+        etats = resultats.pop("etats_par_iteration", None) or []
+        resultats["etats_par_iteration"] = []
+        response = {**response, "resultats": resultats}
+
     payload_json = json.dumps(response)
     camp_key = f"simpy:campagne:{campagne_id}"
     hist_key = f"simpy:circuit:{circuit_slug}:history"
@@ -98,6 +114,8 @@ def save_campaign(circuit_slug: str, campagne_id: str, response: dict) -> bool:
     CAMP_TTL_S = 86400 * 30    # 30 jours — les campagnes restent consultables un mois
     META_TTL_S = 86400 * 30    # 30 jours — les métadonnées suivent le payload
     TIRAGES_TTL_S = 86400 * 7  # 7 jours — les tirages bruts sont éphémères
+    ETATS_BATCH_SIZE = 500     # ≈ 375 Ko/lot (8 pts × 5 champs) — large marge de sécurité
+    ETATS_TTL_S = 86400 * 7    # 7 jours — éphémère, comme :tirages
 
     # Construire la métadonnée légère (6 champs)
     meta = {
@@ -139,10 +157,28 @@ def save_campaign(circuit_slug: str, campagne_id: str, response: dict) -> bool:
             "Campagne persistée : %s (%d octets, meta=%d o, tirages=%d o, circuit=%s)",
             campagne_id, len(payload_json), len(meta_json), len(tirages_json), circuit_slug,
         )
-        return True
     except Exception as exc:
         log.error(
             "save_campaign échouée (circuit=%s, campagne_id=%s, payload=%d octets) : %s",
             circuit_slug, campagne_id, len(payload_json), exc,
         )
         return False
+
+    etats_key = f"{camp_key}:etats"
+    for i in range(0, len(etats), ETATS_BATCH_SIZE):
+        batch = etats[i:i + ETATS_BATCH_SIZE]
+        try:
+            _pipeline([["RPUSH", etats_key, *[json.dumps(e) for e in batch]]])
+        except Exception as exc:
+            log.error(
+                "Lot d'états [%d:%d] échoué pour %s : %s",
+                i, i + len(batch), campagne_id, exc,
+            )
+            break
+    if etats:
+        try:
+            _pipeline([["EXPIRE", etats_key, ETATS_TTL_S]])
+        except Exception:
+            pass
+
+    return True
