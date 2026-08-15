@@ -57,7 +57,7 @@
 			return;
 		}
 		try {
-			/** @type {{ circuit: string, parametres_incertains: any[], simulation: any, collecter_etats: boolean, email?: string, nom?: string, url_webhook?: string }} */
+			/** @type {{ circuit: string, parametres_incertains: any[], simulation: any, collecter_etats: boolean, email?: string, nom?: string }} */
 			const body = {
 				circuit: 'solaire',
 				parametres_incertains: params,
@@ -67,7 +67,6 @@
 			if (data.user?.email) {
 				body.email = data.user.email;
 				body.nom = data.user.nom;
-				body.url_webhook = `${window.location.origin}/webhooks/campagne-terminee`;
 			}
 			await simulationStore.run('solaire', body);
 		} catch {

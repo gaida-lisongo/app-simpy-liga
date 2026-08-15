@@ -35,14 +35,19 @@ log = logging.getLogger(__name__)
 # CoolProp par tirage + sérialisation Pydantic des tirages bruts).
 N_MAX = 10000
 
+# URL publique du site (backend/.env) — sert à la fois de cible pour le webhook
+# de notification et de base pour le lien "voir les résultats" du mail. Une
+# seule source de vérité, pas de dépendance au header Host du reverse-proxy
+# ni d'aller-retour d'URL depuis le navigateur.
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).strftime("camp_%Y%m%dT%H%M%SZ")
 
 
 def start_run(circuit, params, sim, sorties, collecter_etats: bool = False,
-              email: str | None = None, nom: str | None = None,
-              url_webhook: str | None = None) -> dict:
+              email: str | None = None, nom: str | None = None) -> dict:
     """
     Lance la campagne en arrière-plan et renvoie un ack immédiat.
 
@@ -54,12 +59,12 @@ def start_run(circuit, params, sim, sorties, collecter_etats: bool = False,
         collecter_etats : bool — collecte les états thermodynamiques par tirage
                           (bilan exergétique). Coûteux (~×8 mémoire) — désactivé
                           par défaut.
-        email, nom, url_webhook : si email ET url_webhook sont fournis, un
-                          webhook POST est appelé à la fin de la campagne (avec
-                          X-Internal-Token) pour déclencher une notification —
-                          voir frontend/.../webhooks/campagne-terminee. Aucun
-                          envoi de mail côté Python : c'est le frontend qui
-                          l'envoie via son infra nodemailer existante.
+        email, nom      : si email est fourni (et PUBLIC_BASE_URL configuré),
+                          un webhook POST est appelé à la fin de la campagne
+                          (avec X-Internal-Token) pour déclencher une
+                          notification — voir frontend/.../webhooks/campagne-terminee.
+                          Aucun envoi de mail côté Python : c'est le frontend
+                          qui l'envoie via son infra nodemailer existante.
     Returns:
         dict {campagne_id, statut, channel, N_iterations}
     """
@@ -135,10 +140,10 @@ def start_run(circuit, params, sim, sorties, collecter_etats: bool = False,
 
             # 4. Notification best-effort — n'affecte jamais le résultat de la
             # campagne (déjà persisté et poussé aux étapes précédentes).
-            if email and url_webhook:
+            if email and PUBLIC_BASE_URL:
                 try:
                     httpx.post(
-                        url_webhook,
+                        f"{PUBLIC_BASE_URL}/webhooks/campagne-terminee",
                         json={
                             "email": email,
                             "nom": nom,
@@ -146,21 +151,15 @@ def start_run(circuit, params, sim, sorties, collecter_etats: bool = False,
                             "campagne_id": campagne_id,
                             "N_iterations": sim.N_iterations,
                             "statut": "termine",
-                            # Renvoyé tel quel pour que la route webhook déduise
-                            # l'origine publique du lien du mail depuis cette
-                            # valeur (construite par le navigateur avec
-                            # window.location.origin), plutôt que de faire
-                            # confiance au header Host tel que vu par le
-                            # reverse-proxy — plus fiable, aucune ambiguïté.
-                            "url_webhook": url_webhook,
+                            "base_url": PUBLIC_BASE_URL,
                         },
                         headers={"X-Internal-Token": os.environ.get("INTERNAL_API_TOKEN", "")},
                         timeout=10.0,
                     )
                 except Exception as exc:  # noqa: BLE001
                     log.warning(
-                        "Webhook de notification échoué (campagne_id=%s, url=%s) : %s",
-                        campagne_id, url_webhook, exc,
+                        "Webhook de notification échoué (campagne_id=%s) : %s",
+                        campagne_id, exc,
                     )
 
         except Exception as e:  # noqa: BLE001
