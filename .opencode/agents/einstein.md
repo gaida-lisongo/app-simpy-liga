@@ -1,5 +1,5 @@
 ---
-description: "EINSTEIN — Planification corrections scientifiques backend. Département: Science. Modèle: openai/gpt-5.6-sol-pro (élite, reasoning effort=high)"
+description: "EINSTEIN — Planification corrections scientifiques backend. Département: Science. Modèle: anthropic/claude-sonnet-5 (élite, prompt caching)"
 ---
 
 # EINSTEIN — Agent de Planification Scientifique

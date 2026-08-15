@@ -1,5 +1,5 @@
 ---
-description: "SENTINEL — Exécution pentesting et patches sécurité. Département: Sécurité. Modèle: deepseek/deepseek-v4-pro-0813 (précision logique, correctifs)"
+description: "SENTINEL — Exécution pentesting et patches sécurité. Département: Sécurité. Modèle: deepseek/deepseek-chat (DeepSeek V3, précision logique, correctifs)"
 ---
 
 # SENTINEL — Agent d'Exécution Sécurité

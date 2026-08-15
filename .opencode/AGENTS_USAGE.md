@@ -8,19 +8,21 @@
 | Commande | Agent | Modèle | Coût indicatif* | Quand l'utiliser |
 |---|---|---|---|---|
 | `/status` | STATUS | `google/gemini-3.7-flash` | ~$0.002 | "Où en est-on ?" (lit 1 seul fichier) |
-| `/plan-science [anomalie]` | EINSTEIN | `openai/gpt-5.6-sol-pro` | ~$0.10 | Correction backend/physique — plan |
-| `/patch` | PATCHER | `deepseek/deepseek-v4-pro-0813` | ~$0.01 | Exécuter le plan EINSTEIN |
-| `/audit [scope]` | SHEERLOCK → SENTINEL | `claude-sonnet-5` → `deepseek-v4-pro-0813` | ~$0.05 | Audit sécurité (plan + exécution) |
-| `/secure` | SENTINEL | `deepseek/deepseek-v4-pro-0813` | ~$0.01 | Appliquer patches de sécurité |
+| `/plan-science [anomalie]` | EINSTEIN | `anthropic/claude-sonnet-5` | plus bas que l'ancien `gpt-5.6-sol-pro`, prompt caching actif | Correction backend/physique — plan |
+| `/patch` | PATCHER | `deepseek/deepseek-chat` | ~$0.01 | Exécuter le plan EINSTEIN |
+| `/audit [scope]` | SHEERLOCK → SENTINEL | `claude-sonnet-5` → `deepseek-chat` | ~$0.05 | Audit sécurité (plan + exécution) |
+| `/secure` | SENTINEL | `deepseek/deepseek-chat` | ~$0.01 | Appliquer patches de sécurité |
 
 *Estimation indicative pour un appel isolé (hypothèse ~8k tokens prompt / ~2k
 completion pour un planificateur, ~15k/3k pour un exécuteur qui lit du code).
-Le coût réel dépend de la taille du contexte chargé — voir `maxContextTokens`.
+Le coût réel dépend de la taille du contexte chargé (voir `maxContextTokens`) et
+du hit-rate de prompt caching sur les 3 Primary Anthropic — un contexte
+`memory-bank/` répété entre appels est mis en cache.
 
 ### UI/UX — pas de commande dédiée actuellement
 
 SUPERMAN (`anthropic/claude-sonnet-5`) et BUILDER
-(`deepseek/deepseek-v4-flash-0731`) sont toujours configurés dans
+(`deepseek/deepseek-v4-flash`) sont toujours configurés dans
 `opencode.json` — **ils ne sont pas abandonnés**. Les commandes `/plan-ui` et
 `/build` ont été retirées volontairement (voir historique git). En attendant
 une décision sur leur remplacement, invoque-les directement en mentionnant
@@ -68,8 +70,9 @@ l'agent (`@superman`, `@builder`) plutôt que via une commande courte.
 3. `/compact` obligatoire en fin de session BUILDER et PATCHER (long sessions)
 4. SUPERMAN et EINSTEIN ne modifient aucun fichier source → pas de rollback à gérer
 5. Ne jamais charger `memory-bank/shared/systemPatterns.md` dans une session UI — c'est pour Science uniquement
-6. EINSTEIN tourne avec `reasoning.effort: high` (voir `opencode.json`) — délibérément
-   plus lent/cher pour éviter les plans flous qui font boucler PATCHER en correctifs
+6. SUPERMAN, EINSTEIN et SHEERLOCK tournent avec `prompt_cache: true` (voir
+   `opencode.json`) — le contexte `memory-bank/` répété entre appels est mis en
+   cache, ce qui réduit le coût des plans "one-shot" sans sacrifier leur qualité
 
 ## Département par tâche
 

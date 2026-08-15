@@ -1,5 +1,5 @@
 ---
-description: "BUILDER — Implémentation UI/UX frontend. Département: UI/UX. Modèle: deepseek/deepseek-v4-flash-0731 (rapide, économique)"
+description: "BUILDER — Implémentation UI/UX frontend. Département: UI/UX. Modèle: deepseek/deepseek-v4-flash (rapide, économique)"
 ---
 
 # BUILDER — Agent d'Implémentation Frontend

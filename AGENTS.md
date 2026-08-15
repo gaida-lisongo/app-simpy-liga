@@ -22,20 +22,20 @@ seulement STATUS** — voir Protocole de délégation ci-dessous.
 
 | Département | Primary (planifie) | Subagent (exécute) | Rôle |
 |---|---|---|---|
-| **UI/UX** | SUPERMAN — `anthropic/claude-sonnet-5` | BUILDER — `deepseek/deepseek-v4-flash-0731` | Features et corrections interface |
-| **Science** | EINSTEIN — `openai/gpt-5.6-sol-pro` (reasoning=high) | PATCHER — `deepseek/deepseek-v4-pro-0813` | Corrections thermodynamiques backend |
-| **Sécurité** | SHEERLOCK — `anthropic/claude-sonnet-5` | SENTINEL — `deepseek/deepseek-v4-pro-0813` | Audit et patches sécurité |
+| **UI/UX** | SUPERMAN — `anthropic/claude-sonnet-5` | BUILDER — `deepseek/deepseek-v4-flash` | Features et corrections interface |
+| **Science** | EINSTEIN — `anthropic/claude-sonnet-5` | PATCHER — `deepseek/deepseek-chat` | Corrections thermodynamiques backend |
+| **Sécurité** | SHEERLOCK — `anthropic/claude-sonnet-5` | SENTINEL — `deepseek/deepseek-chat` | Audit et patches sécurité |
 | **Transversal** | STATUS — `google/gemini-3.7-flash` | — | Passerelle & Orchestrateur — informe, évalue les prompts, améliore, transmet aux primaires, fait le rapport. JAMAIS de code. |
 
 Tous les modèles ci-dessus sont accédés via le provider `openrouter` (voir
-`opencode.json`). Les planificateurs (SUPERMAN, EINSTEIN, SHEERLOCK) utilisent des
-modèles haut de gamme pour produire des plans complets dès la première tentative
-("one-shot") — un plan flou coûte plus cher en itérations de correctif chez
-l'exécuteur qu'un modèle plus capable en amont. Les exécuteurs (BUILDER, PATCHER,
-SENTINEL) utilisent des modèles rapides/économiques une fois le plan cadré avec
-précision — sauf PATCHER/SENTINEL qui reçoivent le modèle DeepSeek "pro" (et non
-"flash") car leur exécution (physique, sécurité) demande plus de rigueur logique
-que l'implémentation UI de BUILDER.
+`opencode.json`). Les 3 Primary Anthropic (SUPERMAN, EINSTEIN, SHEERLOCK) tournent
+tous sur `claude-sonnet-5` avec `prompt_cache: true` pour réduire le coût des
+plans "one-shot" — un plan flou coûte plus cher en itérations de correctif chez
+l'exécuteur qu'un modèle plus capable en amont, donc mieux vaut investir dans un
+plan complet dès la première tentative. Les exécuteurs (BUILDER, PATCHER,
+SENTINEL) utilisent tous la même famille DeepSeek : BUILDER sur
+`deepseek-v4-flash` (rapide/économique, adapté à l'UI), PATCHER et SENTINEL sur
+`deepseek-chat` (DeepSeek V3).
 
 ### Protocole de délégation (TOUS les Primary : SUPERMAN, EINSTEIN, SHEERLOCK, STATUS)
 
