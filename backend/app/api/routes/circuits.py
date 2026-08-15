@@ -80,6 +80,7 @@ def run(circuit: Circuit, req: CampagneRequest | None = None) -> dict:
         params  = PARAMETRES[circuit]
         sim     = SimulationConfig(cible=_CIBLE_DEFAUT)
         sorties = SORTIES[circuit]
+        collecter_etats = False
     else:
         if req.circuit != circuit:
             raise HTTPException(400, "Circuit du corps ≠ circuit de l'URL.")
@@ -87,8 +88,9 @@ def run(circuit: Circuit, req: CampagneRequest | None = None) -> dict:
         sim     = req.simulation
         sim.cible = sim.cible or _CIBLE_DEFAUT   # garantir la cible
         sorties = req.sorties_suivies or SORTIES[circuit]
+        collecter_etats = req.collecter_etats
 
-    return runner.start_run(circuit, params, sim, sorties)
+    return runner.start_run(circuit, params, sim, sorties, collecter_etats=collecter_etats)
 
 
 @router.post("/{circuit}/fiabilite", response_model=FiabiliteResponse)

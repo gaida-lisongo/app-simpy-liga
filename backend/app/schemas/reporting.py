@@ -86,6 +86,12 @@ class CampagneRequest(BaseModel):
         default_factory=list,
         description="Sorties suivies. Vide = utilise SORTIES[circuit] par défaut."
     )
+    collecter_etats: bool = Field(
+        False,
+        description="Si True, collecte les états thermodynamiques de chaque tirage "
+                     "retenu (resultats.etats_par_iteration). Coûteux en mémoire "
+                     "(~×8) — désactivé par défaut, à activer pour le bilan exergétique.",
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -206,6 +212,11 @@ class Resultats(BaseModel):
     etats_cycle: list[EtatCycle] = Field(
         default_factory=list,
         description="Points d'état du cycle de référence (paramètres à leur valeur nominale).",
+    )
+    etats_par_iteration: list[dict] = Field(
+        default_factory=list,
+        description="États thermodynamiques par tirage retenu (un élément "
+                     "{iteration, states} par tirage) — vide si collecter_etats=False.",
     )
     bilan_energetique: Optional[BilanEnergetique] = Field(
         None, description="Bilan Q_evap/Q_gen/Q_cond/W_pompe/COP du cycle de référence."

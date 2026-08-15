@@ -34,6 +34,7 @@ def _run_chunk(
     noms: list[str],
     sorties_suivies: list[str],
     cible_kW: float,
+    collecter_etats: bool = False,
 ) -> dict:
     """
     Exécuté dans un worker process : calcule run_cycle() pour un lot de
@@ -43,9 +44,10 @@ def _run_chunk(
     """
     collected: dict[str, list[float]] = {s: [] for s in sorties_suivies}
     lignes: list[dict[str, float]] = []
+    etats_par_iteration: list[dict] = []
     n_rejets = 0
     for tirage in tirages:
-        out = run_cycle(tirage, cible_kW=cible_kW)
+        out = run_cycle(tirage, cible_kW=cible_kW, include_states=collecter_etats)
         if not out.get("physically_valid", False):
             n_rejets += 1
             continue
@@ -55,7 +57,13 @@ def _run_chunk(
                 collected[s].append(float(out[s]))
                 ligne[s] = float(out[s])
         lignes.append(ligne)
-    return {"collected": collected, "lignes": lignes, "n_rejets": n_rejets}
+        if collecter_etats and "states" in out:
+            etats_par_iteration.append({
+                "iteration": len(lignes) - 1,
+                "states": out["states"],
+            })
+    return {"collected": collected, "lignes": lignes, "n_rejets": n_rejets,
+            "etats_par_iteration": etats_par_iteration}
 
 
 def _chunked(items: list, n_chunks: int) -> list[list]:
@@ -71,6 +79,7 @@ def run_campaign(
     params: list[ParametreIncertain],
     config: SimulationConfig,
     sorties_suivies: list[str],
+    collecter_etats: bool = False,
     progress_cb: Optional[Callable[[int, int], None]] = None,
     N_sobol: Optional[int] = None,
 ) -> tuple[Resultats, dict]:
@@ -132,6 +141,7 @@ def run_campaign(
 
     collected: dict[str, list[float]] = {s: [] for s in sorties_suivies}
     tirages_bruts: list[dict[str, float]] = []
+    etats_tous: list[dict] = []
     n_rejets = 0
 
     if n >= PARALLEL_THRESHOLD and MAX_WORKERS > 1:
@@ -141,22 +151,30 @@ def run_campaign(
         chunks = _chunked(all_tirages, n_chunks)
         executor = get_executor()
         futures = [
-            executor.submit(_run_chunk, chunk, noms, sorties_suivies, cible_kW)
+            executor.submit(_run_chunk, chunk, noms, sorties_suivies, cible_kW, collecter_etats)
             for chunk in chunks
         ]
         done = 0
+        offset = 0
         for chunk, future in zip(chunks, futures):
             result = future.result()
             for s in sorties_suivies:
                 collected[s].extend(result["collected"][s])
             tirages_bruts.extend(result["lignes"])
             n_rejets += result["n_rejets"]
+            # Les chunks sont réassemblés dans l'ordre de soumission (ordre
+            # préservé par zip(chunks, futures)) : l'index local à chaque
+            # chunk doit être rebasé par le nombre de tirages retenus déjà
+            # accumulés, sinon plusieurs itérations porteraient le même numéro.
+            for e in result["etats_par_iteration"]:
+                etats_tous.append({"iteration": e["iteration"] + offset, "states": e["states"]})
+            offset += len(result["lignes"])
             done += len(chunk)
             if progress_cb is not None:
                 progress_cb(done, total_budget)
     else:
         for tirage in all_tirages:
-            out = run_cycle(tirage, cible_kW=cible_kW)
+            out = run_cycle(tirage, cible_kW=cible_kW, include_states=collecter_etats)
             if not out.get("physically_valid", False):
                 n_rejets += 1
             else:
@@ -166,6 +184,11 @@ def run_campaign(
                         collected[s].append(float(out[s]))
                         ligne[s] = float(out[s])
                 tirages_bruts.append(ligne)
+                if collecter_etats and "states" in out:
+                    etats_tous.append({
+                        "iteration": len(tirages_bruts) - 1,
+                        "states": out["states"],
+                    })
 
     if progress_cb is not None:
         progress_cb(n, total_budget)
@@ -180,6 +203,7 @@ def run_campaign(
     # Analyse statistique
     resultats = Resultats()
     resultats.tirages = tirages_bruts
+    resultats.etats_par_iteration = etats_tous  # vide si collecter_etats=False
 
     if ref.get("physically_valid", False):
         resultats.etats_cycle = [EtatCycle(**s) for s in ref.get("states", [])]

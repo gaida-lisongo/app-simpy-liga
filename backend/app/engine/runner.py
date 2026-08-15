@@ -37,15 +37,18 @@ def _now() -> str:
     return datetime.now(timezone.utc).strftime("camp_%Y%m%dT%H%M%SZ")
 
 
-def start_run(circuit, params, sim, sorties) -> dict:
+def start_run(circuit, params, sim, sorties, collecter_etats: bool = False) -> dict:
     """
     Lance la campagne en arrière-plan et renvoie un ack immédiat.
 
     Args:
-        circuit   : Circuit (enum)
-        params    : list[ParametreIncertain]
-        sim       : SimulationConfig (muté : N_iterations plafonné à N_MAX)
-        sorties   : list[str] — sorties suivies
+        circuit         : Circuit (enum)
+        params          : list[ParametreIncertain]
+        sim             : SimulationConfig (muté : N_iterations plafonné à N_MAX)
+        sorties         : list[str] — sorties suivies
+        collecter_etats : bool — collecte les états thermodynamiques par tirage
+                          (bilan exergétique). Coûteux (~×8 mémoire) — désactivé
+                          par défaut.
     Returns:
         dict {campagne_id, statut, channel, N_iterations}
     """
@@ -73,8 +76,8 @@ def start_run(circuit, params, sim, sorties) -> dict:
 
     def worker() -> None:
         try:
-            resultats, _ = run_campaign(params, sim, sorties, progress_cb=progress_cb,
-                                        N_sobol=N_SOBOL_DEFAUT)
+            resultats, _ = run_campaign(params, sim, sorties, collecter_etats=collecter_etats,
+                                        progress_cb=progress_cb, N_sobol=N_SOBOL_DEFAUT)
             cible_v = sim.cible.valeur if sim.cible else 12.0
             resp = ReportingResponse(
                 article=MetaArticle(circuit=circuit, **META[circuit]),

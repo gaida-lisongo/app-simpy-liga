@@ -5,6 +5,39 @@
 
 ---
 
+## Plan A4-5 — Export des états thermodynamiques par itération — 2026-08-15 ✅ CORRIGÉ
+
+**Statut** : terminé et vérifié. Détail complet dans
+`memory-bank/science/journal/2026-08-15.md`.
+
+**Constat** : `resultats.etats_cycle` (cycle nominal, valeurs nominales des
+paramètres) est calculé une seule fois et sert aux diagrammes T-s — c'est
+volontaire et conservé tel quel. Mais les états des N cycles réellement
+résolus par la campagne étaient calculés dans `_run_chunk()` puis jetés :
+aucune information par itération n'était disponible pour le bilan exergétique.
+
+**Correction** :
+- `backend/app/engine/monte_carlo.py` — nouveau paramètre `collecter_etats`
+  (défaut `False`) sur `_run_chunk()` et `run_campaign()`. Collecte les états
+  de chaque tirage retenu dans `resultats.etats_par_iteration`, avec rebasage
+  de l'index après fusion des chunks parallèles.
+- `backend/app/schemas/reporting.py` — `Resultats.etats_par_iteration: list[dict]`
+  et `CampagneRequest.collecter_etats: bool`.
+- `backend/app/engine/runner.py` + `backend/app/api/routes/circuits.py` —
+  propagation du flag jusqu'à `POST /api/{circuit}/run`.
+- `backend/tests/test_etats_par_iteration.py` (nouveau, 6 tests).
+
+**Vérifié** : 56/56 tests verts. N=500 seed=42 : statistiques identiques
+avec/sans le flag, cycle nominal intact (`h_7=146.740`, `h_8=2667.614`,
+`Δh=2520.874`), invariant A4-2 intact (`COP×Q_gen=11.9995`). Export CSV format
+long N=500 (4000 lignes) produit avec un md5 différent de l'ancien md5 figé —
+confirme que les états varient désormais bien entre itérations.
+
+**Pas fait** (hors scope de cette session, cf. journal) : campagne de
+production N=10 000 avec le flag activé.
+
+---
+
 ## Plan A4-2 — écrasement de `m_dot_pri` et `Q_gen` dans le circuit solaire — 2026-08-15 ✅ CORRIGÉ
 
 **Statut** : terminé et vérifié. À lire par PATCHER/opencode avant tout nouveau
