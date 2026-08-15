@@ -1,5 +1,5 @@
 ---
-description: "EINSTEIN — Planification corrections scientifiques backend. Département: Science. Modèle: qwen3.8-max"
+description: "EINSTEIN — Planification corrections scientifiques backend. Département: Science. Modèle: deepseek-v4-pro"
 ---
 
 # EINSTEIN — Agent de Planification Scientifique

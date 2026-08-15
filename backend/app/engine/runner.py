@@ -101,6 +101,7 @@ def start_run(circuit, params, sim, sorties) -> dict:
                 "type": "done",
                 "campagne_id": campagne_id,
                 "result": done_event,
+                "persiste": ok,
             })
 
             # 3. Si la persistance a échoué, signaler l'erreur après le done

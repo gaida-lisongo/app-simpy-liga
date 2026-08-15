@@ -41,7 +41,7 @@
   "agent": {
     "superman": {
       "mode": "primary",
-      "model": "opencode-go/minimax-m3",
+      "model": "openrouter/minimax/minimax-m2.7",
       "temperature": 0.2,
       "prompt": "{file:./.opencode/agents/superman.md}",
       "permission": {
@@ -53,7 +53,7 @@
     },
     "builder": {
       "mode": "subagent",
-      "model": "opencode-go/deepseek-v4-flash",
+      "model": "openrouter/deepseek/deepseek-v4-flash",
       "temperature": 0.1,
       "prompt": "{file:./.opencode/agents/builder.md}",
       "permission": {
@@ -64,7 +64,7 @@
     },
     "einstein": {
       "mode": "primary",
-      "model": "opencode-go/qwen3.8-max",
+      "model": "openrouter/deepseek/deepseek-v4-pro",
       "temperature": 0.1,
       "prompt": "{file:./.opencode/agents/einstein.md}",
       "permission": {
@@ -75,7 +75,7 @@
     },
     "patcher": {
       "mode": "subagent",
-      "model": "opencode-go/qwen3.6-plus",
+      "model": "openrouter/qwen/qwen3.6-plus",
       "temperature": 0.1,
       "prompt": "{file:./.opencode/agents/patcher.md}",
       "permission": {
@@ -86,11 +86,11 @@
     },
     "sheerlock": {
       "mode": "primary",
-      "model": "opencode-go/glm-5.2",
+      "model": "openrouter/z-ai/glm-5.1",
       "temperature": 0.3,
       "prompt": "{file:./.opencode/agents/sheerlock.md}",
       "permission": {
-        "edit": "allow",
+        "edit": "deny",
         "bash": "ask",
         "webfetch": "allow"
       },
@@ -98,7 +98,7 @@
     },
     "sentinel": {
       "mode": "subagent",
-      "model": "opencode-go/deepseek-v4-pro",
+      "model": "openrouter/openai/gpt-5.6-luna",
       "temperature": 0.1,
       "prompt": "{file:./.opencode/agents/sentinel.md}",
       "permission": {
@@ -109,7 +109,7 @@
     },
     "status": {
       "mode": "primary",
-      "model": "opencode-go/mimo-v2.5",
+      "model": "openrouter/xiaomi/mimo-v2.5",
       "temperature": 0.0,
       "prompt": "{file:./.opencode/agents/status.md}",
       "permission": {

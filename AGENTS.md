@@ -12,7 +12,24 @@ Les sorties alimentent des articles scientifiques. Une erreur silencieuse = un r
 | **UI/UX** | SUPERMAN (primary) + BUILDER (primary) | qwen-3.8-max + deepseek-v4-flash | Features et corrections interface |
 | **Science** | EINSTEIN (primary) + PATCHER (primary) | claude-sonnet-4-7 + qwen-3.7-plus | Corrections thermodynamiques backend |
 | **Sécurité** | SHEERLOCK (primary) + SENTINEL (subagent) | glm-5.2 + deepseek-v4-pro | Audit et patches sécurité |
-| **Transversal** | STATUS | inclusionai/ling-2.6-flash | "Où en est-on ?" uniquement |
+| **Transversal** | STATUS | mimo-v2.5 | Passerelle & Orchestrateur — informe, évalue les prompts, améliore, transmet aux primaires, fait le rapport. JAMAIS de code. |
+
+
+### Transversal — Protocole STATUS
+
+```
+STATUS reçoit  → requête utilisateur
+              → évalue le prompt (clarté, complétude)
+              → identifie l'agent primaire (EINSTEIN / SUPERMAN / SHERLOCK)
+              → améliore le prompt
+              → transmet via task(subagent_type=primaire)
+              → reçoit le résultat
+              → synthétise pour l'utilisateur
+
+STATUS contacte UNIQUEMENT : einstein, superman, sheerlock
+STATUS ne contacte JAMAIS   : patcher, builder, sentinel, explore, general
+```
+
 
 ---
 

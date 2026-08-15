@@ -5,9 +5,9 @@
 	 * Sélecteur d'historique — liste les campagnes passées d'un circuit
 	 * (cache Redis qui accumule). L'utilisateur peut revenir à n'importe quelle
 	 * campagne précédente. La plus récente est en tête.
-	 * @type {{ slug: string, campaigns: any[] }}
+	 * @type {{ slug: string, campaigns: any[], hydrating?: boolean }}
 	 */
-	let { slug, campaigns } = $props();
+	let { slug, campaigns, hydrating = false } = $props();
 
 	function onSelect(/** @type {Event} */ e) {
 		const id = /** @type {HTMLSelectElement} */ (e.currentTarget).value;
@@ -25,16 +25,18 @@
 		'rounded-[var(--radius-sm)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none transition-colors';
 </script>
 
-{#if campaigns?.length}
-	<div class="flex items-center gap-2">
-		<label for="hist-{slug}" class="text-xs text-[var(--text-muted)]">Historique</label>
-		<select id={`hist-${slug}`} onchange={onSelect} class={selectCls} aria-label="Campagnes passées">
+<div class="flex items-center gap-2">
+	<label for="hist-{slug}" class="text-xs text-[var(--text-muted)]">Campagne :</label>
+	<select id={`hist-${slug}`} onchange={onSelect} class={selectCls} aria-label="Campagnes passées" disabled={hydrating}>
+		{#if !campaigns?.length}
+			<option value="" disabled selected>— Aucune campagne —</option>
+		{:else}
 			{#each campaigns as cg (cg.id)}
 				<option value={cg.id}>
 					{fmtDate(cg.campagne_id)} · N={cg.N_iterations ?? '?'}
 					{cg.STR != null ? ` · STR=${Number(cg.STR).toFixed(3)}` : (cg.COP != null ? ` · COP=${Number(cg.COP).toFixed(3)}` : '')}
 				</option>
 			{/each}
-		</select>
-	</div>
-{/if}
+		{/if}
+	</select>
+</div>

@@ -71,10 +71,15 @@ def push_event(campagne_id: str, payload: dict) -> bool:
 def save_campaign(circuit_slug: str, campagne_id: str, response: dict) -> bool:
     """Persiste le résultat complet d'une campagne dans Upstash Redis.
 
-    Écrit en un seul pipeline :
-      1. SET  simpy:campagne:{id}          — payload JSON complet (avec tirages)
-      2. LPUSH simpy:circuit:{circuit}:history  — id en tête de liste
-      3. LTRIM simpy:circuit:{circuit}:history 0 19 — garde les 20 dernières
+    Écrit en un seul pipeline 8 commandes (dénormalisation P2) :
+      1. SET  simpy:campagne:{id}              — payload JSON complet (avec tirages)
+      2. EXPIRE simpy:campagne:{id}            — TTL 30 jours
+      3. SET  simpy:campagne:{id}:meta         — 6 métadonnées légères (~200 o)
+      4. EXPIRE simpy:campagne:{id}:meta       — TTL 30 jours
+      5. SET  simpy:campagne:{id}:tirages      — tirages bruts seuls (~1.8 Mo)
+      6. EXPIRE simpy:campagne:{id}:tirages    — TTL 7 jours
+      7. LPUSH simpy:circuit:{circuit}:history — id en tête de liste
+      8. LTRIM simpy:circuit:{circuit}:history 0 19 — garde les 20 dernières
 
     Returns:
         True si le pipeline a réussi, False sinon.
@@ -90,15 +95,49 @@ def save_campaign(circuit_slug: str, campagne_id: str, response: dict) -> bool:
     camp_key = f"simpy:campagne:{campagne_id}"
     hist_key = f"simpy:circuit:{circuit_slug}:history"
 
+    CAMP_TTL_S = 86400 * 30    # 30 jours — les campagnes restent consultables un mois
+    META_TTL_S = 86400 * 30    # 30 jours — les métadonnées suivent le payload
+    TIRAGES_TTL_S = 86400 * 7  # 7 jours — les tirages bruts sont éphémères
+
+    # Construire la métadonnée légère (6 champs)
+    meta = {
+        "campagne_id": campagne_id,
+        "circuit": circuit_slug,
+        "N_iterations": response.get("simulation", {}).get("N_iterations"),
+        "echantillonnage": response.get("simulation", {}).get("echantillonnage"),
+        "COP": (
+            response.get("resultats", {})
+            .get("statistiques", {})
+            .get("COP", {})
+            .get("moyenne")
+        ),
+        "STR": (
+            response.get("resultats", {})
+            .get("statistiques", {})
+            .get("STR", {})
+            .get("moyenne")
+        ),
+    }
+    meta_json = json.dumps(meta)
+
+    # Extraire les tirages bruts (s'ils existent)
+    tirages = response.get("resultats", {}).get("tirages", [])
+    tirages_json = json.dumps(tirages)
+
     try:
         _pipeline([
             ["SET", camp_key, payload_json],
+            ["EXPIRE", camp_key, CAMP_TTL_S],
+            ["SET", f"{camp_key}:meta", meta_json],
+            ["EXPIRE", f"{camp_key}:meta", META_TTL_S],
+            ["SET", f"{camp_key}:tirages", tirages_json],
+            ["EXPIRE", f"{camp_key}:tirages", TIRAGES_TTL_S],
             ["LPUSH", hist_key, campagne_id],
             ["LTRIM", hist_key, 0, 19],
         ])
         log.info(
-            "Campagne persistée : %s (%d octets, circuit=%s)",
-            campagne_id, len(payload_json), circuit_slug,
+            "Campagne persistée : %s (%d octets, meta=%d o, tirages=%d o, circuit=%s)",
+            campagne_id, len(payload_json), len(meta_json), len(tirages_json), circuit_slug,
         )
         return True
     except Exception as exc:

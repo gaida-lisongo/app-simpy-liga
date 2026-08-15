@@ -20,11 +20,31 @@ const kSummary = 'simpy:dashboard:summary';
  */
 export async function saveCampagne(circuit, response) {
 	const id = response.campagne_id ?? `local_${Date.now()}`;
+	const key = kCampagne(id);
+	const hist = kHistory(circuit);
+	const metaKey = `${key}:meta`;
+	const tiragesKey = `${key}:tirages`;
+
+	// Métadonnées légères pour getRecentCampaigns (évite de charger 40 Mo)
+	const meta = {
+		campagne_id: id,
+		circuit,
+		N_iterations: response.simulation?.N_iterations ?? null,
+		echantillonnage: response.simulation?.echantillonnage ?? null,
+		COP: response.resultats?.statistiques?.COP?.moyenne ?? null,
+		STR: response.resultats?.statistiques?.STR?.moyenne ?? null
+	};
+
+	// Tirages bruts pour analyse détaillée
+	const tirages = response.resultats?.tirages ?? [];
+
 	await Promise.all([
-		redis.set(kCampagne(id), response),
-		redis.lpush(kHistory(circuit), id)
+		redis.set(key, response),                          // payload complet
+		redis.set(metaKey, JSON.stringify(meta)),          // métadonnées légères
+		redis.set(tiragesKey, JSON.stringify(tirages)),    // tirages bruts
+		redis.lpush(hist, id)                              // historique
 	]);
-	await redis.ltrim(kHistory(circuit), 0, HISTORY_LIMIT - 1);
+	await redis.ltrim(hist, 0, HISTORY_LIMIT - 1);
 	return id;
 }
 
@@ -74,18 +94,36 @@ export function getHistorique(circuit) {
 export async function getRecentCampaigns(circuit, limit = 20) {
 	const ids = /** @type {string[]} */ (await redis.lrange(kHistory(circuit), 0, limit - 1).catch(() => []));
 	if (!ids.length) return [];
-	const rows = await Promise.all(ids.map((id) => redis.get(kCampagne(id))));
+
+	// Lecture des :meta (≈4 Ko au lieu de ≈40 Mo pour 20 campagnes)
+	const metaKey = (id) => `simpy:campagne:${id}:meta`;
+	const rows = await Promise.all(ids.map((id) => redis.get(metaKey(id))));
+
 	const out = [];
 	for (let i = 0; i < rows.length; i++) {
 		const r = /** @type {any} */ (rows[i]);
-		if (!r) continue;
+		if (!r) {
+			// Fallback rétrocompatibilité : campagne créée avant le déploiement :meta
+			const full = await redis.get(kCampagne(ids[i]));
+			if (!full) continue;
+			out.push({
+				id: ids[i],
+				campagne_id: full.campagne_id ?? ids[i],
+				N_iterations: full.simulation?.N_iterations ?? null,
+				echantillonnage: full.simulation?.echantillonnage ?? null,
+				COP: full.resultats?.statistiques?.COP?.moyenne ?? null,
+				STR: full.resultats?.statistiques?.STR?.moyenne ?? null
+			});
+			continue;
+		}
+		// Champs à plat venant de :meta
 		out.push({
 			id: ids[i],
 			campagne_id: r.campagne_id ?? ids[i],
-			N_iterations: r.simulation?.N_iterations ?? null,
-			echantillonnage: r.simulation?.echantillonnage ?? null,
-			COP: r.resultats?.statistiques?.COP?.moyenne ?? null,
-			STR: r.resultats?.statistiques?.STR?.moyenne ?? null
+			N_iterations: r.N_iterations ?? null,
+			echantillonnage: r.echantillonnage ?? null,
+			COP: r.COP ?? null,
+			STR: r.STR ?? null
 		});
 	}
 	return out;
@@ -153,6 +191,8 @@ export async function clearCircuit(circuit) {
 	const keys = [
 		kHistory(circuit),
 		...ids.map((id) => kCampagne(id)),
+		...ids.map((id) => `${kCampagne(id)}:meta`),      // ← NOUVEAU
+		...ids.map((id) => `${kCampagne(id)}:tirages`),   // ← NOUVEAU
 		...ids.map((id) => `simpy:campagne:${id}:events`)
 	];
 	if (keys.length) await redis.del(...keys);

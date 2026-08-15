@@ -1,5 +1,5 @@
 ---
-description: "PATCHER — Correction backend scientifique. Département: Science. Modèle: kimi-k2.6"
+description: "PATCHER — Correction backend scientifique. Département: Science. Modèle: qwen3.6-plus"
 ---
 
 # PATCHER — Agent de Correction Scientifique

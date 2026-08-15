@@ -3,115 +3,59 @@
 > Relais entre SUPERMAN et BUILDER.
 > SUPERMAN écrit le plan. BUILDER lit et exécute. Écrasé à chaque nouveau plan.
 
-## Plan SUPERMAN — Correction contrat SSE post-persistence Upstash — 2026-08-14
+## Plan BUILDER — Correction saveCampagne() écriture clés :meta et :tirages — 2026-08-15
 
-**Objectif** : Adapter `simulationStore.svelte.js` au nouveau contrat SSE où `done` contient un payload léger (`tirages: []`) et un flag `ev.persiste`. Le frontend doit récupérer la campagne complète depuis Redis.
+**Objectif** : `saveCampagne()` dans `redis.js` n'écrit que le payload complet + LPUSH/LTRIM. Elle n'écrit PAS les clés `:meta` et `:tirages`. Résultat : `getRecentCampaigns()` ne trouve pas les `:meta` → fallback lent et inefficace.
 
 **Sprint** : Sprint 2 — Circuit Solaire (finitions)
 **Agent** : BUILDER
 
 ---
 
-### Contexte technique
+### Fichier concerné
 
-Backend commit `2bc4a93` a introduit la persistance Upstash côté backend. Le contrat SSE a changé :
-- **Avant** : `done` → `ev.result` contenait la campagne complète (stats + tirages)
-- **Après** : `done` → `ev.result` contient `{ campagne_id, ...métadonnées, tirages: [] }` (léger)
-- **Nouveau champ** : `ev.persiste` (boolean) — indique si la campagne a été persistée côté backend
-
-**Problème** : Le store fait `s.result = ev.result` (léger) + `persist(circuit, ev.result)` (4 Mo duplicate). Les composants (McDonutChart, DensityTabs) font `s.result.tirages` → vide → composants disparaissent.
-
----
-
-### Fichier frontend concerné
-
-- `frontend/src/lib/stores/simulationStore.svelte.js`
+- `frontend/src/lib/server/redis.js` — fonction `saveCampagne()`
 
 ---
 
 ### Étapes BUILDER
 
-- [x] **1.** Dans le handler `done` (ligne 124), extraire le flag `ev.persiste`
-- [x] **2.** Si `ev.persiste === true` : appeler `GET /db/campagne/{id}` pour récupérer la campagne complète depuis Redis, puis assigner à `s.result`
-- [x] **3.** Supprimer l'appel `persist(circuit, ev.result)` (plus nécessaire — backend persiste déjà)
-- [x] **4.** Si `ev.persiste === false` (fallback,simulation courte ou mode dégradé) : conserver `s.result = ev.result` (comportement inchangé)
-- [x] **5.** Vérification : `npm run build` depuis `/frontend`
+- [x] **1.** Lire la fonction `saveCampagne()` actuelle dans `redis.js`
+- [x] **2.** Modifier `saveCampagne()` pour écrire les 3 clés : payload complet, `:meta`, `:tirages`
+- [x] **3.** Vérification : `npm run build` depuis `/frontend`
 
 ---
 
-### Règles Svelte 5 à rappeler
+### Modifications apportées
 
-- `$state`, `$derived`, `$effect`, `$props`, `$bindable` — jamais `export let`
-- Plotly.js uniquement — jamais recharts/chart.js/SVG statique
-- Redis avant API — cache Upstash avant chaque appel VPS
-- Labels UI = français descriptif — jamais notation technique dans l'UI
+Dans `saveCampagne()` :
+1. **Payload complet** (inchangé) : `redis.set(key, response)` — toujours dans le `Promise.all`
+2. **Nouveau** : `redis.set(metaKey, JSON.stringify(meta))` — métadonnées légères (campagne_id, circuit, N_iterations, echantillonnage, COP, STR)
+3. **Nouveau** : `redis.set(tiragesKey, JSON.stringify(tirages))` — tirages bruts
+4. **Historique** (inchangé) : `redis.lpush(hist, id)` + `redis.ltrim(hist, 0, 19)`
 
----
-
-### Code cible (fragment — lignes 119–137)
-
-```js
-source.onmessage = (/** @type {MessageEvent} */ e) => {
-    try {
-        const ev = JSON.parse(e.data);
-        if (ev.type === 'progress') {
-            s.progress = ev.pct ?? 0;
-        } else if (ev.type === 'done') {
-            settled = true;
-            s.progress = 100;
-            if (ev.persiste) {
-                // Backend a persisté en Upstash — va chercher la campagne complète
-                const full = await fetch(`/db/campagne/${id}`).then((r) => r.json());
-                s.result = full;
-                // Plus de persist() ici — backend a déjà persisté
-            } else {
-                // Fallback : result complet vient directement du SSE
-                s.result = ev.result;
-            }
-            resolve();
-        } else if (ev.type === 'error') {
-            settled = true;
-            reject(new Error(ev.message ?? 'Erreur de simulation.'));
-        }
-    } catch (err) {
-        settled = true;
-        reject(/** @type {Error} */ (err));
-    }
-};
-```
-
-**Note** : `id` vient de `ack.campagne_id` (capture à la ligne 106). Il est disponible dans la closure.
+Toutes les écritures sont parallélisées dans un seul `Promise.all`.
 
 ---
 
 ### Critère d'acceptation
 
-1. Après `done` avec `persiste: true`, `s.result` contient les `tirages` (tableau non vide)
-2. McDonutChart et DensityTabs affichent les données (plus de composants vides)
-3. L'historique des campagnes se charge correctement (appel à `/db/campagnes` au hydrate)
-4. `npm run build` passe sans erreur
-5. Aucune régression sur le chemin `ev.persiste === false` (simulation sans persistance)
+1. `saveCampagne()` écrit les clés `simpy:campagne:{id}:meta` et `simpy:campagne:{id}:tirages`
+2. `getRecentCampaigns()` trouve les `:meta` sans fallback
+3. `npm run build` passe sans erreur
+4. Aucune régression sur `getCampagne()`, `getRecentCampaigns()`, `clearCircuit()`
 
 ---
 
-### Pièges connus
+### Pièges évités
 
-- **Ne pas supprimer `resolve()`** dans le bloc `done` — le Promise caller attend la résolution
-- **L'appel `fetch` est async** — le `source.onmessage` handler doit être `async` (ajouter le mot-clé)
-- **`id` est capturé** dans la closure (ligne 106) — ne pas le redéclarer dans le handler
-- **`persist()` n'existe plus après modification** — vérifier qu'aucun autre code ne l'appelle
-- **Fallback** : si `fetch('/db/campagne/{id}')` échoue, le bloc catch du caller `run()` gère l'erreur
+- ✅ Le payload complet `redis.set(key, response)` est conservé
+- ✅ `getRecentCampaigns()` et `getCampagne()` non modifiés
+- ✅ `clearCircuit()` déjà compatible (lignes 174-175 suppriment `:meta` et `:tirages`)
 
 ---
 
 ### Observations en passage
 
-- Le endpoint `GET /db/campagne/{id}` existe déjà (appelé par `selectCampaign()` ligne 83) — pas de nouveau endpoint à créer
-- La fonction `persist()` devient dead code après cette modification — la laisser en place (elle peut servir à d'autres appels later) mais ne plus l'appeler depuis `run()`
-- La fonction `selectCampaign()` continue de fonctionner — même endpoint, même comportement
-
----
-
-## Reprendre ici
-
-**Après fix** : vérifier que `s.result.tirages` n'est plus vide dans la console et que les graphiques Monte Carlo réapparaissent dans l'UI solaire.
+- `clearCircuit()` (lignes 169-180) supprime déjà les clés `:meta` et `:tirages` — aucune modification nécessaire
+- Le format du `meta` correspond exactement à ce que `getRecentCampaigns()` attend dans sa branche `:meta` (lignes 99-108)

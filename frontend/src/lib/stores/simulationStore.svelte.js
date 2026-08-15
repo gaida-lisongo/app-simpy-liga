@@ -126,13 +126,33 @@ async function run(circuit, body) {
 							s.progress = 100;
 							if (ev.persiste) {
 								// Backend a persisté en Upstash — va chercher la campagne complète
-								const full = await fetch(`/db/campagne/${id}`).then((r) => r.json());
-								s.result = full;
-								// Plus de persist() ici — backend a déjà persisté
+								try {
+									const r = await fetch(`/db/campagne/${id}`);
+									if (r.ok) {
+										s.result = await r.json();
+									} else {
+										// Fallback : résultat léger du SSE (sans tirages bruts)
+										s.result = ev.result;
+									}
+								} catch {
+									s.result = ev.result;
+								}
 							} else {
 								// Fallback : result complet vient directement du SSE
 								s.result = ev.result;
+								// Persistance frontend (best-effort) si backend n'a pas persisté
+								persist(circuit, ev.result);
 							}
+							// Toujours mettre à jour l'historique local après une nouvelle campagne
+							const meta = {
+								id,
+								campagne_id: ev.result?.campagne_id ?? ev.campagne_id ?? id,
+								N_iterations: ev.result?.simulation?.N_iterations ?? null,
+								echantillonnage: ev.result?.simulation?.echantillonnage ?? null,
+								COP: ev.result?.resultats?.statistiques?.COP?.moyenne ?? null,
+								STR: ev.result?.resultats?.statistiques?.STR?.moyenne ?? null
+							};
+							s.campaigns = [meta, ...s.campaigns].slice(0, 20);
 							resolve();
 						} else if (ev.type === 'error') {
 							settled = true;

@@ -49,6 +49,7 @@ Cœur physique CoolProp intégré. Monte-Carlo LHS seed=42 validé.
 | M1 | sensitivity.py — Sobol, SRC, Spearman | `[~]` partiel |
 | M2 | /api/solaire/fiabilite endpoint | `[~]` fiabilite.py présent |
 | P1 | Persistance campagnes : 413 SvelteKit (payload 4 Mo > 512 Ko) + persist fire-and-forget | `[x]` backend PATCHER ✅ (37/37 tests verts, Δh_gen OK, intégration réelle Upstash validée) — frontend BUILDER ✅ (contrat SSE adapté, fetch Redis après done, build OK) |
+| P2 | Dénormalisation Redis : getRecentCampaigns 40 Mo → ~4 Ko (clés :meta) | `[x]` backend PATCHER ✅ (43/43 tests verts, Δh_gen OK, 6 nouveaux tests) — frontend BUILDER ✅ (redis.js modifié : saveCampagne écrit désormais :meta et :tirages, build OK) |
 
 ### Frontend — page solaire
 
@@ -61,7 +62,7 @@ Cœur physique CoolProp intégré. Monte-Carlo LHS seed=42 validé.
 | SolaireKpiGrid | `[x]` |
 | SolaireProfilTube | `[x]` |
 | SolaireSankey | `[x]` |
-| STR_vs_Tgen avec cop_ref=None | `[ ]` à gérer côté UI |
+| HistorySelector (toujours visible) | `[x]` restauré — select visible même sans campagne, option "— Aucune campagne —" |
 
 ### Article A4
 

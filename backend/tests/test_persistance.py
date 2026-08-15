@@ -24,29 +24,56 @@ class TestSaveCampaign:
     """save_campaign émet [SET, LPUSH, LTRIM] et renvoie True/False."""
 
     def test_save_campaign_pipeline_commands(self):
-        """Les 3 commandes sont émises avec les bonnes clés et LTRIM 0 19."""
+        """Les 8 commandes sont émises avec les bonnes clés (dénormalisation P2)."""
         captured = []
 
         def fake_pipeline(commands):
             captured.extend(commands)
-            return ["OK", 1, "OK"]
+            return ["OK"] * 8
 
         with patch.object(upstash, "_CLIENT", MagicMock()):
             with patch.object(upstash, "_pipeline", side_effect=fake_pipeline):
                 result = upstash.save_campaign("solaire", "camp_test123", {"foo": "bar"})
 
         assert result is True
-        assert len(captured) == 3
+        assert len(captured) == 8
 
-        cmd_set, cmd_lpush, cmd_ltrim = captured
+        cmd_set, cmd_expire, cmd_meta_set, cmd_meta_expire, cmd_tir_set, cmd_tir_expire, cmd_lpush, cmd_ltrim = captured
+
+        # 1. SET payload complet
         assert cmd_set[0] == "SET"
         assert cmd_set[1] == "simpy:campagne:camp_test123"
         assert json.loads(cmd_set[2]) == {"foo": "bar"}
 
+        # 2. EXPIRE payload complet
+        assert cmd_expire[0] == "EXPIRE"
+        assert cmd_expire[1] == "simpy:campagne:camp_test123"
+        assert cmd_expire[2] == 86400 * 30
+
+        # 3. SET :meta
+        assert cmd_meta_set[0] == "SET"
+        assert cmd_meta_set[1] == "simpy:campagne:camp_test123:meta"
+
+        # 4. EXPIRE :meta
+        assert cmd_meta_expire[0] == "EXPIRE"
+        assert cmd_meta_expire[1] == "simpy:campagne:camp_test123:meta"
+        assert cmd_meta_expire[2] == 86400 * 30
+
+        # 5. SET :tirages
+        assert cmd_tir_set[0] == "SET"
+        assert cmd_tir_set[1] == "simpy:campagne:camp_test123:tirages"
+
+        # 6. EXPIRE :tirages
+        assert cmd_tir_expire[0] == "EXPIRE"
+        assert cmd_tir_expire[1] == "simpy:campagne:camp_test123:tirages"
+        assert cmd_tir_expire[2] == 86400 * 7
+
+        # 7. LPUSH
         assert cmd_lpush[0] == "LPUSH"
         assert cmd_lpush[1] == "simpy:circuit:solaire:history"
         assert cmd_lpush[2] == "camp_test123"
 
+        # 8. LTRIM
         assert cmd_ltrim[0] == "LTRIM"
         assert cmd_ltrim[1] == "simpy:circuit:solaire:history"
         assert cmd_ltrim[2] == 0
@@ -63,7 +90,7 @@ class TestSaveCampaign:
     def test_save_campaign_returns_false_when_unavailable(self):
         """Si Upstash non configuré, renvoie False sans appeler _pipeline."""
         with patch.object(upstash, "_CLIENT", None):
-            with patch.object(upstash, "_pipeline", return_value=["OK", 1, "OK"]) as mock_pipe:
+            with patch.object(upstash, "_pipeline", return_value=["OK"] * 8) as mock_pipe:
                 result = upstash.save_campaign("solaire", "camp_no", {"x": 1})
 
         assert result is False
@@ -216,9 +243,11 @@ class TestRunnerPersistance:
         done_result = done_events[0]["payload"]["result"]
         # Les tirages doivent être vides dans le done
         assert done_result["resultats"]["tirages"] == []
-        # Le flag persiste doit être présent
+        # Le flag persiste doit être présent dans result (rétro-compat)
         assert "persiste" in done_result
         assert done_result["persiste"] is True
+        # Le flag persiste doit AUSSI être au niveau racine de l'événement (pour le frontend)
+        assert done_events[0]["payload"]["persiste"] is True
         # Les statistiques doivent être intactes
         assert done_result["resultats"]["statistiques"]["COP"]["moyenne"] == 1.0
         assert done_result["resultats"]["convergence"]["N_stable"] == 100
@@ -242,9 +271,10 @@ class TestRunnerPersistance:
         assert len(error_events) == 1
         assert "Persistance Redis échouée" in error_events[0]["payload"]["message"]
 
-        # Le done doit quand même avoir persiste=False
+        # Le done doit quand même avoir persiste=False (dans result ET au niveau racine)
         done_events = [p for p in captured_pushes if p["payload"].get("type") == "done"]
         assert done_events[0]["payload"]["result"]["persiste"] is False
+        assert done_events[0]["payload"]["persiste"] is False
 
     def test_resp_not_mutated(self, monkeypatch):
         """L'objet resp original n'est pas muté (ses tirages restent intacts)."""
@@ -288,3 +318,178 @@ class TestRunnerPersistance:
 
         # Le payload sauvegardé doit avoir les tirages
         assert len(resp_holder["response"]["resultats"]["tirages"]) == 3
+
+
+# --------------------------------------------------------------------------- #
+#  Dénormalisation P2 — clés :meta et :tirages
+# --------------------------------------------------------------------------- #
+
+class TestSaveCampaignDenormalized:
+    """save_campaign écrit aussi :meta et :tirages (dénormalisation P2)."""
+
+    def test_meta_key_written_with_six_fields(self):
+        """La clé :meta contient exactement 6 champs."""
+        captured = []
+
+        def fake_pipeline(commands):
+            captured.extend(commands)
+            return ["OK"] * 8
+
+        response = {
+            "simulation": {"N_iterations": 10000, "echantillonnage": "LHS"},
+            "resultats": {
+                "statistiques": {
+                    "COP": {"moyenne": 1.042},
+                    "STR": {"moyenne": 0.628},
+                },
+                "tirages": [{"G": 800, "COP": 1.0}],
+            },
+        }
+
+        with patch.object(upstash, "_CLIENT", MagicMock()):
+            with patch.object(upstash, "_pipeline", side_effect=fake_pipeline):
+                result = upstash.save_campaign("solaire", "camp_test_meta", response)
+
+        assert result is True
+        assert len(captured) == 8
+
+        # Trouver la commande SET :meta
+        meta_cmds = [c for c in captured if c[0] == "SET" and ":meta" in str(c[1])]
+        assert len(meta_cmds) == 1
+        meta_payload = json.loads(meta_cmds[0][2])
+        assert meta_payload == {
+            "campagne_id": "camp_test_meta",
+            "circuit": "solaire",
+            "N_iterations": 10000,
+            "echantillonnage": "LHS",
+            "COP": 1.042,
+            "STR": 0.628,
+        }
+
+    def test_tirages_key_written_separately(self):
+        """La clé :tirages contient uniquement le tableau de tirages bruts."""
+        captured = []
+
+        def fake_pipeline(commands):
+            captured.extend(commands)
+            return ["OK"] * 8
+
+        tirages_data = [{"G": 800, "COP": 1.0}, {"G": 750, "COP": 0.95}]
+        response = {
+            "simulation": {"N_iterations": 2, "echantillonnage": "LHS"},
+            "resultats": {
+                "statistiques": {"COP": {"moyenne": 0.975}, "STR": {"moyenne": 0.6}},
+                "tirages": tirages_data,
+            },
+        }
+
+        with patch.object(upstash, "_CLIENT", MagicMock()):
+            with patch.object(upstash, "_pipeline", side_effect=fake_pipeline):
+                upstash.save_campaign("solaire", "camp_test_tir", response)
+
+        # Trouver la commande SET :tirages
+        tir_cmds = [c for c in captured if c[0] == "SET" and ":tirages" in str(c[1])]
+        assert len(tir_cmds) == 1
+        tir_payload = json.loads(tir_cmds[0][2])
+        assert tir_payload == tirages_data
+
+    def test_tirages_ttl_is_7_days(self):
+        """Le TTL de :tirages est 604800 (7 jours), pas 30 jours."""
+        captured = []
+
+        def fake_pipeline(commands):
+            captured.extend(commands)
+            return ["OK"] * 8
+
+        response = {
+            "simulation": {"N_iterations": 1, "echantillonnage": "LHS"},
+            "resultats": {
+                "statistiques": {"COP": {"moyenne": 1.0}, "STR": {"moyenne": 0.5}},
+                "tirages": [{"G": 800}],
+            },
+        }
+
+        with patch.object(upstash, "_CLIENT", MagicMock()):
+            with patch.object(upstash, "_pipeline", side_effect=fake_pipeline):
+                upstash.save_campaign("solaire", "camp_ttl", response)
+
+        # Trouver EXPIRE pour :tirages
+        expire_cmds = [c for c in captured if c[0] == "EXPIRE"]
+        tir_expire = [c for c in expire_cmds if ":tirages" in str(c[1])]
+        assert len(tir_expire) == 1
+        assert tir_expire[0][2] == 86400 * 7  # 7 jours
+
+    def test_meta_ttl_is_30_days(self):
+        """Le TTL de :meta est 2592000 (30 jours), comme le payload complet."""
+        captured = []
+
+        def fake_pipeline(commands):
+            captured.extend(commands)
+            return ["OK"] * 8
+
+        response = {
+            "simulation": {"N_iterations": 1, "echantillonnage": "LHS"},
+            "resultats": {
+                "statistiques": {"COP": {"moyenne": 1.0}, "STR": {"moyenne": 0.5}},
+                "tirages": [],
+            },
+        }
+
+        with patch.object(upstash, "_CLIENT", MagicMock()):
+            with patch.object(upstash, "_pipeline", side_effect=fake_pipeline):
+                upstash.save_campaign("solaire", "camp_meta_ttl", response)
+
+        expire_cmds = [c for c in captured if c[0] == "EXPIRE"]
+        meta_expire = [c for c in expire_cmds if ":meta" in str(c[1])]
+        assert len(meta_expire) == 1
+        assert meta_expire[0][2] == 86400 * 30  # 30 jours
+
+    def test_meta_handles_missing_statistiques_gracefully(self):
+        """Si COP/STR absents, les champs meta valent None (pas d'exception)."""
+        captured = []
+
+        def fake_pipeline(commands):
+            captured.extend(commands)
+            return ["OK"] * 8
+
+        response = {
+            "simulation": {"N_iterations": 5, "echantillonnage": "MC"},
+            "resultats": {},  # pas de statistiques
+        }
+
+        with patch.object(upstash, "_CLIENT", MagicMock()):
+            with patch.object(upstash, "_pipeline", side_effect=fake_pipeline):
+                upstash.save_campaign("moteur", "camp_no_stats", response)
+
+        meta_cmds = [c for c in captured if c[0] == "SET" and ":meta" in str(c[1])]
+        meta_payload = json.loads(meta_cmds[0][2])
+        assert meta_payload["COP"] is None
+        assert meta_payload["STR"] is None
+        assert meta_payload["N_iterations"] == 5
+
+    def test_full_payload_still_has_tirages(self):
+        """Le payload complet (clé principale) contient TOUJOURS les tirages."""
+        captured = []
+
+        def fake_pipeline(commands):
+            captured.extend(commands)
+            return ["OK"] * 8
+
+        tirages_data = [{"G": 800, "COP": 1.0}]
+        response = {
+            "simulation": {"N_iterations": 1, "echantillonnage": "LHS"},
+            "resultats": {
+                "statistiques": {"COP": {"moyenne": 1.0}, "STR": {"moyenne": 0.5}},
+                "tirages": tirages_data,
+            },
+        }
+
+        with patch.object(upstash, "_CLIENT", MagicMock()):
+            with patch.object(upstash, "_pipeline", side_effect=fake_pipeline):
+                upstash.save_campaign("solaire", "camp_full", response)
+
+        # La première commande SET (payload complet) doit contenir les tirages
+        main_set = [c for c in captured if c[0] == "SET" and c[1] == "simpy:campagne:camp_full"]
+        assert len(main_set) == 1
+        main_payload = json.loads(main_set[0][2])
+        assert main_payload["resultats"]["tirages"] == tirages_data
