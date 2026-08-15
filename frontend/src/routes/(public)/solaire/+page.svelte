@@ -48,11 +48,16 @@
 	});
 
 	async function lancerCampagne() {
+		const n = Number(nIterations);
+		if (!Number.isInteger(n) || n < 1 || n > 10000) {
+			st.error = `Nombre d'itérations invalide (${nIterations ?? 'vide'}) — entrez un entier entre 1 et 10000.`;
+			return;
+		}
 		try {
 			await simulationStore.run('solaire', {
 				circuit: 'solaire',
 				parametres_incertains: params,
-				simulation: { N_iterations: nIterations, seed, echantillonnage: methode }
+				simulation: { N_iterations: n, seed, echantillonnage: methode }
 			});
 		} catch {
 			// erreur portée par le store

@@ -23,10 +23,20 @@
 Q_utile    = G · A_col · η_col · (1 − φ_s) / 1000    # kW
 η_th       = η_col · (1 − φ_s)
 STR        = COP_ejc × η_th          # Ghodbane 2015 éq.14 — DÉFINITION UNIQUE
-m_dot_pri  = Q_utile / Δh_gen        # Δh_gen = h_8 − h_7 du cycle réel
+m_dot_pri  = m.get("m_dot_p")        # débit RÉEL du solveur — TOUS circuits, y compris solaire (A4-2)
 η_ex       = η_th · (1−T₀/T_gen) / (1−T₀/T_soleil)
 Q_gen_requis = 12.0 / COP_ejc        # jamais 12/0.35
 IC95       = np.percentile(arr, [2.5, 97.5])  # jamais μ ± 1.96σ
+```
+
+**Circuit solaire uniquement (A4-2, 2026-08-15)** — `m_dot_pri` vient du
+solveur comme les 3 autres circuits (JAMAIS `Q_utile/Δh`). La capacité de
+dimensionnement du champ solaire est exportée séparément :
+
+```python
+m_dot_pri_potentiel = Q_utile / Δh_gen   # Δh_gen = h_8 − h_7 — capacité champ solaire, PAS le débit cycle
+Q_surplus            = Q_utile − Q_gen
+taux_couverture      = Q_utile / Q_gen
 ```
 
 ## Architecture stricte
@@ -74,3 +84,11 @@ app-simpy-liga/
 | η_ex | 0.120898 | 0.010743 | [0.1006 ; 0.1426] |
 
 > Après correction A1 complète : m_dot_pri attendu ≈ 0.01627 kg/s (−11.07 %)
+
+> ⚠️ **Campagne antérieure à A4-2 (2026-08-15)** : la ligne `m_dot_pri`
+> ci-dessus a été mesurée AVANT la correction A4-2 et correspond en réalité
+> à ce qui s'appelle désormais `m_dot_pri_potentiel` (capacité du champ
+> solaire). Depuis A4-2, `m_dot_pri` pour le circuit solaire est le débit
+> RÉEL du solveur : contrôle N=200 seed=42 → μ ≈ 0.00486 kg/s, σ ≈ 0.00087
+> (voir `memory-bank/science/activeContext.md`, section « Plan A4-2 »).
+> Q_utile/η_th/η_ex restent inchangés (formules solaires non touchées).

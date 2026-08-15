@@ -1,7 +1,100 @@
 # activeContext.md — Département Science
 
 > Relais entre EINSTEIN et PATCHER.
-> Mis à jour : 2026-08-14 (soir)
+> Mis à jour : 2026-08-15
+
+---
+
+## Plan A4-2 — écrasement de `m_dot_pri` et `Q_gen` dans le circuit solaire — 2026-08-15 ✅ CORRIGÉ
+
+**Statut** : terminé et vérifié. À lire par PATCHER/opencode avant tout nouveau
+travail sur `_run_cycle_solaire()` ou sur les sorties du circuit solaire.
+
+### Diagnostic (avant correction)
+
+Dans `_run_cycle_solaire()` (`backend/app/adapters/physics_adapter.py`), les
+grandeurs réelles issues du solveur (`m.get("m_dot_p")`, `m.get("Q_gen")`)
+étaient **écrasées** par des valeurs déduites du champ solaire :
+
+```python
+m_dot_pri = Q_utile / delta_h if delta_h > 0 else 0.0   # ❌ AVANT
+out["Q_gen"] = round(Q_utile, 4)                         # ❌ AVANT
+```
+
+Conséquence : `COP = Q_evap / Q_gen` reconstruit à partir des clés exportées
+ne correspondait plus au COP réellement calculé par le solveur
+(mesuré : **0.292 vs 1.0094** sur 305 tirages) — la même incohérence que le
+bug A1 historique, mais réintroduite côté solaire uniquement. `m_dot_pri`
+valait ~0.0163 kg/s (capacité du champ solaire) au lieu de ~0.0046 kg/s
+(débit réel du cycle).
+
+### Correction appliquée
+
+- `backend/app/adapters/physics_adapter.py` — `_run_cycle_solaire()` :
+  - `m_dot_pri` et `Q_gen` exportés viennent désormais **du solveur**
+    (`m.get("m_dot_p")`, `m.get("Q_gen")`), comme pour moteur/frigorifique/couplage.
+    Ne plus jamais les recalculer depuis le champ solaire.
+  - La grandeur `Q_utile / Δh` (capacité de dimensionnement du champ solaire,
+    PAS le débit du cycle) est conservée mais exportée sous son propre nom :
+    **`m_dot_pri_potentiel`**.
+  - Deux nouvelles sorties ajoutées : **`Q_surplus`** (`Q_utile − Q_gen`) et
+    **`taux_couverture`** (`Q_utile / Q_gen`).
+  - `run_cycle()` (moteur/frigorifique/couplage) **non touché** — chemin de
+    code totalement séparé, confirmé par test dédié.
+- `backend/app/api/routes/circuits.py` — `SORTIES[Circuit.solaire]` étendu
+  avec `Q_gen`, `taux_couverture`, `Q_surplus`.
+- `backend/tests/test_solaire_couplage.py` (nouveau, 7 tests) — vérifie
+  Q_evap=12kW imposée, cohérence COP=Q_evap/Q_gen, ordre de grandeur de
+  m_dot_pri (0.003–0.007 kg/s), égalité m_dot_pri == solveur, présence et
+  supériorité de m_dot_pri_potentiel, cohérence de Q_surplus, non-régression
+  de `run_cycle()` classique.
+- `backend/tests/test_api.py::test_solaire_m_dot_pri_realiste` — réécrit :
+  l'ancien contrat (`m_dot_pri == Q_utile/Δh`) encodait le bug ; l'assertion
+  vérifie maintenant `m_dot_pri_potentiel == Q_utile/Δh_reel` et
+  `m_dot_pri < m_dot_pri_potentiel`.
+
+**Suite complète** : `pytest backend/tests/ -v` → 50/50 verts.
+
+### ⚠️ Impact sur la vérification de l'invariant A1
+
+La commande de vérification rapide plus bas dans ce fichier (et dans
+`shared/systemPatterns.md`) utilisait `r['m_dot_pri']` pour calculer Δh_gen.
+Depuis A4-2, **`m_dot_pri` a changé de sens pour le circuit solaire**
+(débit réel du solveur, plus petit) : il faut désormais utiliser
+`r['m_dot_pri_potentiel']` pour retrouver Δh_gen ≈ 2520.874 kJ/kg. Voir
+commande corrigée en bas de ce fichier.
+
+### Campagne de contrôle N=200 seed=42 (post-correction)
+
+```
+Q_utile             mu=41.063  sigma=7.080   (réf. N=10000 : 41.006 — cohérent)
+eta_th              mu=0.6031  sigma=0.0477  (réf. : 0.6030 — inchangé, formule non touchée)
+STR                 mu=0.6094  sigma=0.1130
+m_dot_pri           mu=0.00486 sigma=0.00087 (débit RÉEL solveur — nouveau, remplace l'ancien 0.018)
+m_dot_pri_potentiel mu=0.01632 sigma=0.00282 (≈ ancienne valeur exportée à tort sous m_dot_pri)
+eta_ex              mu=0.1208  sigma=0.0144  (réf. : 0.1209 — inchangé)
+COP                 mu=1.0094  sigma=0.1634
+Q_gen               mu=12.218  sigma=2.095
+Q_evap              mu=11.9997 sigma=0.0130  (12 kW imposée — OK)
+taux_couverture     mu=3.459   sigma=0.828
+Q_surplus           mu=28.846  sigma=7.498
+tirages valides = 200 / 200
+```
+
+Confirme : la physique du champ solaire (Q_utile, η_th, η_ex, Q_evap) est
+**inchangée**, seules les clés d'export m_dot_pri/Q_gen/m_dot_pri_potentiel
+ont été corrigées.
+
+### Pièges pour PATCHER / opencode
+
+- Ne jamais recalculer `m_dot_pri` ou `Q_gen` depuis les grandeurs solaires
+  (`Q_utile`, `Δh`, `A_col`, ...) pour le circuit solaire — elles doivent
+  toujours venir de `m.get("m_dot_p")` / `m.get("Q_gen")` (sortie du solveur),
+  exactement comme les 3 autres circuits.
+- Si besoin de la capacité de dimensionnement du champ solaire, utiliser/lire
+  `m_dot_pri_potentiel` — jamais réutiliser le nom `m_dot_pri` pour ça.
+- `run_cycle()` (chemin classique) est un code path séparé de
+  `_run_cycle_solaire()` : ne pas mélanger les deux en cas de refactor futur.
 
 ---
 
@@ -155,9 +248,11 @@ Corrections A1–A7 majoritairement appliquées dans le code.
 
 ```bash
 backend/.venv/bin/python -c "
-from app.adapters.physics_adapter import run_cycle
-r = run_cycle({'G':800,'eta_col':0.68,'A_col':85,'phi_s':0.10})
-dh = r['Q_utile']/r['m_dot_pri']
+from app.adapters.physics_adapter import _run_cycle_solaire
+r = _run_cycle_solaire({'G':800,'eta_col':0.68,'A_col':85,'phi_s':0.10,'T_0':25,
+                          'T_g':95,'T_e':8,'T_c':35,'eta_is_p':0.75,'eta_n':0.92,
+                          'eta_d':0.85,'eta_m':1.00}, cible_kW=12.0)
+dh = r['Q_utile']/r['m_dot_pri_potentiel']   # A4-2 : m_dot_pri_potentiel, PAS m_dot_pri
 print(f'Δh_gen = {dh:.3f} kJ/kg (attendu 2520.874 ± 0.5)')
 assert abs(dh - 2520.874) < 0.5, f'BUG A1: {dh}'
 print('OK')
@@ -165,6 +260,12 @@ print('OK')
 ```
 (à lancer depuis backend/ — le python système n'a pas les dépendances,
 utiliser backend/.venv/bin/python)
+
+**⚠️ Depuis A4-2 (2026-08-15)** : pour le circuit solaire, `r['m_dot_pri']`
+est le débit RÉEL du solveur (petit, ~0.005 kg/s) — utiliser
+`r['m_dot_pri_potentiel']` pour retrouver Δh_gen. Pour les 3 autres circuits
+(`run_cycle()`), `m_dot_pri` reste la seule et unique grandeur (pas de
+`_potentiel`) et la commande historique avec `run_cycle()` reste valide.
 
 ---
 

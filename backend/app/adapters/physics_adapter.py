@@ -73,14 +73,19 @@ def _run_cycle_solaire(params: dict, cible_kW: float = 12.0,
     (A6/Voie B) : tiré du même catalogue que moteur/frigorifique/couplage,
     plus figé aux conditions nominales.
 
-    PRINCIPE FONDAMENTAL : Q_evap reste imposée à 12 kW. Le mode inverse
-    n'est PAS abandonné. m_dot_pri est une SORTIE calculée depuis Q_utile,
-    pas une entrée du solveur.
+    PRINCIPE FONDAMENTAL : Q_evap reste imposée à 12 kW (mode inverse).
+    m_dot_pri et Q_gen proviennent du solveur, comme pour les trois autres
+    circuits. Le sous-modèle solaire fournit Q_utile (capacité livrée) ;
+    la comparaison Q_utile vs Q_gen donne taux_couverture et Q_surplus.
+    m_dot_pri_potentiel = Q_utile / (h_8 - h_7) est le débit que le champ
+    solaire pourrait alimenter — indicateur de dimensionnement, pas le
+    débit d'exploitation.
 
     STR = COP_ejc × eta_th  (définition Ghodbane et al. 2015, ICT3 éq. 14)
     PAS Q_utile/Q_gen — ce sont deux grandeurs différentes.
 
-    Sorties : Q_utile, Q_sol, Q_opt, eta_th, STR, m_dot_pri, eta_ex.
+    Sorties : Q_utile, Q_sol, Q_opt, eta_th, STR, m_dot_pri, eta_ex,
+    m_dot_pri_potentiel, Q_surplus, taux_couverture.
     """
     G       = params.get("G",       800.0)
     eta_col = params.get("eta_col",  0.68)
@@ -127,7 +132,15 @@ def _run_cycle_solaire(params: dict, cible_kW: float = 12.0,
     h_8 = cr.states[8].h
     delta_h = (h_8 - h_7) / 1000.0
 
-    m_dot_pri = Q_utile / delta_h if delta_h > 0 else 0.0
+    # Débit et puissance générateur RÉELS — issus du solveur en mode inverse
+    # (Q_evap = 12 kW imposée). Ne jamais les recalculer depuis le solaire.
+    m_pri_cycle = m.get("m_dot_p", 0.0)
+    q_gen_cycle = m.get("Q_gen",   0.0)
+
+    # Capacité du champ solaire — grandeur de dimensionnement, PAS le débit du cycle
+    m_dot_pri_potentiel = Q_utile / delta_h if delta_h > 0 else 0.0
+    Q_surplus           = Q_utile - q_gen_cycle
+    taux_couverture     = Q_utile / q_gen_cycle if q_gen_cycle > 0 else 0.0
 
     STR = cop * eta_th
 
@@ -143,15 +156,18 @@ def _run_cycle_solaire(params: dict, cible_kW: float = 12.0,
         "Q_utile":    round(Q_utile,   4),
         "Q_sol":      round(Q_sol,     4),
         "Q_opt":      round(Q_opt,     4),
-        "Q_gen":      round(Q_utile,   4),
-        "Q_evap":     round(m.get("Q_evap",  cible_kW), 4),
-        "Q_cond":     round(m.get("Q_cond",  0.0),     4),
-        "W_pompe":    round(m.get("W_pump",   0.0),     4),
-        "m_dot_pri":  round(m_dot_pri, 6),
-        "m_dot_sec":  round(m.get("m_dot_s",  0.0),     6),
-        "eta_th":     round(eta_th,    5),
-        "eta_ex":     eta_ex,
-        "STR":        round(STR,       5),
+        "Q_gen":               round(q_gen_cycle, 4),
+        "Q_evap":              round(m.get("Q_evap",  cible_kW), 4),
+        "Q_cond":              round(m.get("Q_cond",  0.0),     4),
+        "W_pompe":             round(m.get("W_pump",   0.0),     4),
+        "m_dot_pri":           round(m_pri_cycle, 6),
+        "m_dot_pri_potentiel": round(m_dot_pri_potentiel, 6),
+        "m_dot_sec":           round(m.get("m_dot_s",  0.0),     6),
+        "eta_th":              round(eta_th,    5),
+        "eta_ex":              eta_ex,
+        "STR":                 round(STR,       5),
+        "Q_surplus":           round(Q_surplus, 4),
+        "taux_couverture":     round(taux_couverture, 4),
         "physically_valid": True,
     }
 

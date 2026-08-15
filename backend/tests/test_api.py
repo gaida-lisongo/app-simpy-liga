@@ -170,10 +170,18 @@ def test_solaire_m_dot_pri_realiste():
         f"préchauffage sensible — A1 non corrigé ?"
     )
 
+    # A4-2 : m_dot_pri est le débit RÉEL du solveur (mode inverse, Q_evap=12kW),
+    # pas Q_utile/Δh — cette dernière grandeur est désormais exportée séparément
+    # sous m_dot_pri_potentiel (capacité de dimensionnement du champ solaire).
     Q_utile = out["Q_utile"]
-    m_dot_pri_attendu = Q_utile / delta_h_reel
-    assert abs(out["m_dot_pri"] - m_dot_pri_attendu) < 1e-4, (
-        f"m_dot_pri ({out['m_dot_pri']}) != Q_utile/Δh_reel ({m_dot_pri_attendu})"
+    m_dot_pri_potentiel_attendu = Q_utile / delta_h_reel
+    assert abs(out["m_dot_pri_potentiel"] - m_dot_pri_potentiel_attendu) < 1e-4, (
+        f"m_dot_pri_potentiel ({out['m_dot_pri_potentiel']}) != "
+        f"Q_utile/Δh_reel ({m_dot_pri_potentiel_attendu})"
+    )
+    assert out["m_dot_pri"] < out["m_dot_pri_potentiel"], (
+        "m_dot_pri (débit réel du solveur) doit être nettement inférieur à "
+        "m_dot_pri_potentiel (capacité du champ solaire) — sinon A4-2 a rechuté."
     )
 
 

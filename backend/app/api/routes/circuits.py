@@ -35,7 +35,8 @@ SORTIES: dict[Circuit, list[str]] = {
     Circuit.moteur:       ["COP", "mu", "m_dot_pri", "Q_gen",  "eta_ex"],
     Circuit.frigorifique: ["COP", "mu", "m_dot_pri", "m_dot_sec", "eta_ex"],
     Circuit.couplage:     ["COP", "mu", "Q_gen",     "eta_ex"],
-    Circuit.solaire:      ["Q_utile", "eta_th", "STR", "m_dot_pri", "eta_ex", "COP"],
+    Circuit.solaire:      ["Q_utile", "eta_th", "STR", "m_dot_pri", "eta_ex", "COP",
+                            "Q_gen", "taux_couverture", "Q_surplus"],
 }
 
 _CIBLE_DEFAUT = Cible(grandeur="Q_e", valeur=12.0, unite="kW", tol_pct=5.0)

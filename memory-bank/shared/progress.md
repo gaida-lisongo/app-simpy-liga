@@ -50,6 +50,7 @@ Cœur physique CoolProp intégré. Monte-Carlo LHS seed=42 validé.
 | M2 | /api/solaire/fiabilite endpoint | `[~]` fiabilite.py présent |
 | P1 | Persistance campagnes : 413 SvelteKit (payload 4 Mo > 512 Ko) + persist fire-and-forget | `[x]` backend PATCHER ✅ (37/37 tests verts, Δh_gen OK, intégration réelle Upstash validée) — frontend BUILDER ✅ (contrat SSE adapté, fetch Redis après done, build OK) |
 | P2 | Dénormalisation Redis : getRecentCampaigns 40 Mo → ~4 Ko (clés :meta) | `[x]` backend PATCHER ✅ (43/43 tests verts, Δh_gen OK, 6 nouveaux tests) — frontend BUILDER ✅ (redis.js modifié : saveCampagne écrit désormais :meta et :tirages, build OK) |
+| A4-2 | Solaire : `_run_cycle_solaire()` écrasait `m_dot_pri`/`Q_gen` (solveur) par des valeurs déduites du champ solaire → COP incohérent (0.292 vs 1.009) | `[x]` corrigé 2026-08-15 (50/50 tests verts) — voir `memory-bank/science/activeContext.md` « Plan A4-2 ». Nouvelles sorties : `m_dot_pri_potentiel`, `Q_surplus`, `taux_couverture` |
 
 ### Frontend — page solaire
 
