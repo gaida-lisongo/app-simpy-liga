@@ -1,7 +1,10 @@
 import { redirect } from '@sveltejs/kit';
 import { getSessionUser } from '$lib/server/auth.js';
 
-const PUBLIC_PATHS = ['/connexion', '/activation', '/logout'];
+// /webhooks/* est appelé serveur-à-serveur par le backend Python (jamais par
+// un navigateur) — authentifié par X-Internal-Token dans la route elle-même,
+// pas par un cookie de session.
+const PUBLIC_PATHS = ['/connexion', '/activation', '/logout', '/webhooks'];
 
 export async function handle({ event, resolve }) {
 	const { pathname } = event.url;

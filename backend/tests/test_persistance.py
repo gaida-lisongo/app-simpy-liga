@@ -96,6 +96,47 @@ class TestSaveCampaign:
         assert result is False
         mock_pipe.assert_not_called()
 
+    def test_etats_persistes_par_lots(self):
+        """etats_par_iteration retiré du payload principal, écrit par lots RPUSH."""
+        etats = [{"iteration": i, "states": [{"point": "1", "T": 20.0}]} for i in range(1200)]
+        response = {"resultats": {"etats_par_iteration": etats}}
+        calls = []
+
+        def fake_pipeline(commands):
+            calls.append(commands)
+            return ["OK"] * len(commands)
+
+        with patch.object(upstash, "_CLIENT", MagicMock()):
+            with patch.object(upstash, "_pipeline", side_effect=fake_pipeline):
+                result = upstash.save_campaign("solaire", "camp_etats", response)
+
+        assert result is True
+        # payload principal : etats_par_iteration vidé
+        core_set = calls[0][0]
+        assert json.loads(core_set[2])["resultats"]["etats_par_iteration"] == []
+        # 1200 / 500 = 3 lots RPUSH + 1 EXPIRE
+        rpush_calls = [c for batch in calls[1:] for c in batch if c[0] == "RPUSH"]
+        assert len(rpush_calls) == 3
+        assert sum(len(c) - 2 for c in rpush_calls) == 1200  # total d'éléments écrits
+
+    def test_etats_lot_echoue_sans_faire_echouer_save(self):
+        """Un lot d'états qui échoue ne doit pas faire échouer save_campaign (cœur déjà sauvé)."""
+        etats = [{"iteration": i, "states": []} for i in range(10)]
+        response = {"resultats": {"etats_par_iteration": etats}}
+        calls = {"n": 0}
+
+        def fake_pipeline(commands):
+            calls["n"] += 1
+            if calls["n"] == 2:  # 1er appel = cœur (OK), 2e = lot RPUSH (échoue)
+                raise ConnectionError("timeout")
+            return ["OK"] * len(commands)
+
+        with patch.object(upstash, "_CLIENT", MagicMock()):
+            with patch.object(upstash, "_pipeline", side_effect=fake_pipeline):
+                result = upstash.save_campaign("solaire", "camp_etats_err", response)
+
+        assert result is True  # le cœur a réussi malgré l'échec du lot
+
 
 # --------------------------------------------------------------------------- #
 #  push_event
@@ -163,6 +204,7 @@ def _fake_resultats():
         {"G": 750, "COP": 0.95, "m_dot_pri": 0.017},
         {"G": 850, "COP": 1.05, "m_dot_pri": 0.015},
     ]
+    r.etats_par_iteration = [{"iteration": 0, "states": [{"point": "1", "T": 20.0}]}]
     r.taux_rejet_non_physique_pct = 0.0
     return r
 
@@ -243,6 +285,9 @@ class TestRunnerPersistance:
         done_result = done_events[0]["payload"]["result"]
         # Les tirages doivent être vides dans le done
         assert done_result["resultats"]["tirages"] == []
+        # Les états par itération aussi (même raison : payload SSE léger, la
+        # donnée complète arrive via le re-fetch après persistance)
+        assert done_result["resultats"]["etats_par_iteration"] == []
         # Le flag persiste doit être présent dans result (rétro-compat)
         assert "persiste" in done_result
         assert done_result["persiste"] is True

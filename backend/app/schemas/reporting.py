@@ -92,6 +92,20 @@ class CampagneRequest(BaseModel):
                      "retenu (resultats.etats_par_iteration). Coûteux en mémoire "
                      "(~×8) — désactivé par défaut, à activer pour le bilan exergétique.",
     )
+    email: Optional[str] = Field(
+        None,
+        description="Email du chercheur connecté à l'origine de la campagne. "
+                     "Fourni avec url_webhook, déclenche une notification à la fin.",
+    )
+    nom: Optional[str] = Field(
+        None, description="Nom affiché dans le mail de notification de fin de campagne.",
+    )
+    url_webhook: Optional[str] = Field(
+        None,
+        description="URL du webhook frontend à appeler à la fin de la campagne "
+                     "(notification email) — construite côté navigateur, le backend "
+                     "n'a pas besoin de connaître l'adresse du frontend.",
+    )
 
 
 # --------------------------------------------------------------------------- #

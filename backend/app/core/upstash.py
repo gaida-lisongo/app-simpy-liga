@@ -68,6 +68,36 @@ def push_event(campagne_id: str, payload: dict) -> bool:
         return False
 
 
+ETATS_TTL_S = 86400 * 7  # 7 jours — éphémère, comme :tirages
+
+
+def append_etats_batch(campagne_id: str, batch: list[dict]) -> bool:
+    """Ajoute un lot d'états thermodynamiques à la liste Redis de la campagne.
+
+    Best-effort, ne lève jamais — utilisé pour la persistance incrémentale
+    pendant le calcul (runner.py, via le callback on_etats_chunk de
+    run_campaign()) ET par save_campaign() pour le cas non-incrémental
+    (résultats déjà entièrement calculés, ex. appels directs à run_campaign()
+    sans callback). Chaque appel est sa propre requête HTTP, jamais assemblée
+    avec d'autres lots — c'est ce qui évite le 413 Upstash à gros N.
+    """
+    if not available() or not batch:
+        return False
+    key = f"simpy:campagne:{campagne_id}:etats"
+    try:
+        _pipeline([
+            ["RPUSH", key, *[json.dumps(e) for e in batch]],
+            ["EXPIRE", key, ETATS_TTL_S],
+        ])
+        return True
+    except Exception as exc:
+        log.error(
+            "append_etats_batch échoué (campagne_id=%s, taille=%d) : %s",
+            campagne_id, len(batch), exc,
+        )
+        return False
+
+
 def save_campaign(circuit_slug: str, campagne_id: str, response: dict) -> bool:
     """Persiste le résultat complet d'une campagne dans Upstash Redis.
 
@@ -81,8 +111,17 @@ def save_campaign(circuit_slug: str, campagne_id: str, response: dict) -> bool:
       7. LPUSH simpy:circuit:{circuit}:history — id en tête de liste
       8. LTRIM simpy:circuit:{circuit}:history 0 19 — garde les 20 dernières
 
+    Les états thermodynamiques par itération (`resultats.etats_par_iteration`,
+    potentiellement volumineux — jusqu'à ~7,5 Mo à N=10 000) sont retirés de ce
+    payload et écrits séparément, par lots (RPUSH), sous
+    `simpy:campagne:{id}:etats` : le pipeline ci-dessus est atomique, et un
+    payload trop gros le ferait échouer intégralement (413 Upstash), y compris
+    le LPUSH d'historique — la campagne entière serait alors introuvable.
+
     Returns:
-        True si le pipeline a réussi, False sinon.
+        True si le pipeline principal a réussi (les lots d'états sont
+        best-effort : un lot en échec est loggé mais ne fait pas échouer la
+        fonction — le cœur de la campagne est déjà sauvegardé à ce stade).
     """
     if not available():
         log.warning(
@@ -91,6 +130,13 @@ def save_campaign(circuit_slug: str, campagne_id: str, response: dict) -> bool:
         )
         return False
 
+    etats: list = []
+    if "resultats" in response:
+        resultats = dict(response["resultats"])
+        etats = resultats.pop("etats_par_iteration", None) or []
+        resultats["etats_par_iteration"] = []
+        response = {**response, "resultats": resultats}
+
     payload_json = json.dumps(response)
     camp_key = f"simpy:campagne:{campagne_id}"
     hist_key = f"simpy:circuit:{circuit_slug}:history"
@@ -98,6 +144,7 @@ def save_campaign(circuit_slug: str, campagne_id: str, response: dict) -> bool:
     CAMP_TTL_S = 86400 * 30    # 30 jours — les campagnes restent consultables un mois
     META_TTL_S = 86400 * 30    # 30 jours — les métadonnées suivent le payload
     TIRAGES_TTL_S = 86400 * 7  # 7 jours — les tirages bruts sont éphémères
+    ETATS_BATCH_SIZE = 500     # ≈ 375 Ko/lot (8 pts × 5 champs) — large marge de sécurité
 
     # Construire la métadonnée légère (6 champs)
     meta = {
@@ -139,10 +186,16 @@ def save_campaign(circuit_slug: str, campagne_id: str, response: dict) -> bool:
             "Campagne persistée : %s (%d octets, meta=%d o, tirages=%d o, circuit=%s)",
             campagne_id, len(payload_json), len(meta_json), len(tirages_json), circuit_slug,
         )
-        return True
     except Exception as exc:
         log.error(
             "save_campaign échouée (circuit=%s, campagne_id=%s, payload=%d octets) : %s",
             circuit_slug, campagne_id, len(payload_json), exc,
         )
         return False
+
+    for i in range(0, len(etats), ETATS_BATCH_SIZE):
+        batch = etats[i:i + ETATS_BATCH_SIZE]
+        if not append_etats_batch(campagne_id, batch):
+            break
+
+    return True

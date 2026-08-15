@@ -40,6 +40,31 @@ export async function sendMail({ to, subject, html }) {
 }
 
 /**
+ * @param {{ nom: string, circuit: string, campagneId: string, lien: string }} input
+ */
+export function mailCampagneTermineeHtml({ nom, circuit, campagneId, lien }) {
+	return `
+	<div style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:#0d0d0d;padding:24px;color:#1f2937;">
+		<div style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:14px;border:1px solid #e5e7eb;padding:32px;">
+			<h1 style="margin:0 0 8px;font-size:20px;color:#111111;">Votre campagne est terminée</h1>
+			<p style="margin:0 0 16px;color:#4b5563;">Bonjour <strong>${nom || ''}</strong>,</p>
+			<p style="margin:0 0 24px;color:#4b5563;">
+				La campagne de simulation lancée sur le circuit <strong>${circuit}</strong>
+				(${campagneId}) est terminée et ses résultats sont disponibles.
+				Actualisez la page pour les retrouver.
+			</p>
+			<a href="${lien}" style="display:inline-block;background:#06c167;color:#ffffff;text-decoration:none;font-weight:600;padding:12px 24px;border-radius:8px;">
+				Voir les résultats
+			</a>
+			<p style="margin:24px 0 0;color:#9ca3af;font-size:13px;">
+				Ou copiez ce lien dans votre navigateur :<br />
+				<a href="${lien}" style="color:#06c167;word-break:break-all;">${lien}</a>
+			</p>
+		</div>
+	</div>`;
+}
+
+/**
  * @param {{ nom: string, lien: string, reinitialisation?: boolean }} input
  */
 export function mailActivationHtml({ nom, lien, reinitialisation = false }) {
