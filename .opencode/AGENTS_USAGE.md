@@ -7,11 +7,11 @@
 
 | Commande | Agent | Modèle | Coût indicatif* | Quand l'utiliser |
 |---|---|---|---|---|
-| `/status` | STATUS | `google/gemini-3.7-flash-20260813` | ~$0.002 | "Où en est-on ?" (lit 1 seul fichier) |
-| `/plan-science [anomalie]` | EINSTEIN | `openai/gpt-5.6-sol-pro-20260709` | ~$0.10 | Correction backend/physique — plan |
-| `/patch` | PATCHER | `deepseek/deepseek-v4-pro-20260813` | ~$0.01 | Exécuter le plan EINSTEIN |
-| `/audit [scope]` | SHEERLOCK → SENTINEL | `claude-sonnet-5` → `deepseek-v4-pro` | ~$0.05 | Audit sécurité (plan + exécution) |
-| `/secure` | SENTINEL | `deepseek/deepseek-v4-pro-20260813` | ~$0.01 | Appliquer patches de sécurité |
+| `/status` | STATUS | `google/gemini-3.7-flash` | ~$0.002 | "Où en est-on ?" (lit 1 seul fichier) |
+| `/plan-science [anomalie]` | EINSTEIN | `openai/gpt-5.6-sol-pro` | ~$0.10 | Correction backend/physique — plan |
+| `/patch` | PATCHER | `deepseek/deepseek-v4-pro-0813` | ~$0.01 | Exécuter le plan EINSTEIN |
+| `/audit [scope]` | SHEERLOCK → SENTINEL | `claude-sonnet-5` → `deepseek-v4-pro-0813` | ~$0.05 | Audit sécurité (plan + exécution) |
+| `/secure` | SENTINEL | `deepseek/deepseek-v4-pro-0813` | ~$0.01 | Appliquer patches de sécurité |
 
 *Estimation indicative pour un appel isolé (hypothèse ~8k tokens prompt / ~2k
 completion pour un planificateur, ~15k/3k pour un exécuteur qui lit du code).
@@ -19,8 +19,8 @@ Le coût réel dépend de la taille du contexte chargé — voir `maxContextToke
 
 ### UI/UX — pas de commande dédiée actuellement
 
-SUPERMAN (`anthropic/claude-sonnet-5-20260630`) et BUILDER
-(`deepseek/deepseek-v4-flash-0731-20260731`) sont toujours configurés dans
+SUPERMAN (`anthropic/claude-sonnet-5`) et BUILDER
+(`deepseek/deepseek-v4-flash-0731`) sont toujours configurés dans
 `opencode.json` — **ils ne sont pas abandonnés**. Les commandes `/plan-ui` et
 `/build` ont été retirées volontairement (voir historique git). En attendant
 une décision sur leur remplacement, invoque-les directement en mentionnant

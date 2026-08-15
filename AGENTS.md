@@ -22,10 +22,10 @@ seulement STATUS** — voir Protocole de délégation ci-dessous.
 
 | Département | Primary (planifie) | Subagent (exécute) | Rôle |
 |---|---|---|---|
-| **UI/UX** | SUPERMAN — `anthropic/claude-sonnet-5-20260630` | BUILDER — `deepseek/deepseek-v4-flash-0731-20260731` | Features et corrections interface |
-| **Science** | EINSTEIN — `openai/gpt-5.6-sol-pro-20260709` (reasoning=high) | PATCHER — `deepseek/deepseek-v4-pro-20260813` | Corrections thermodynamiques backend |
-| **Sécurité** | SHEERLOCK — `anthropic/claude-sonnet-5-20260630` | SENTINEL — `deepseek/deepseek-v4-pro-20260813` | Audit et patches sécurité |
-| **Transversal** | STATUS — `google/gemini-3.7-flash-20260813` | — | Passerelle & Orchestrateur — informe, évalue les prompts, améliore, transmet aux primaires, fait le rapport. JAMAIS de code. |
+| **UI/UX** | SUPERMAN — `anthropic/claude-sonnet-5` | BUILDER — `deepseek/deepseek-v4-flash-0731` | Features et corrections interface |
+| **Science** | EINSTEIN — `openai/gpt-5.6-sol-pro` (reasoning=high) | PATCHER — `deepseek/deepseek-v4-pro-0813` | Corrections thermodynamiques backend |
+| **Sécurité** | SHEERLOCK — `anthropic/claude-sonnet-5` | SENTINEL — `deepseek/deepseek-v4-pro-0813` | Audit et patches sécurité |
+| **Transversal** | STATUS — `google/gemini-3.7-flash` | — | Passerelle & Orchestrateur — informe, évalue les prompts, améliore, transmet aux primaires, fait le rapport. JAMAIS de code. |
 
 Tous les modèles ci-dessus sont accédés via le provider `openrouter` (voir
 `opencode.json`). Les planificateurs (SUPERMAN, EINSTEIN, SHEERLOCK) utilisent des

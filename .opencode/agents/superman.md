@@ -1,5 +1,5 @@
 ---
-description: "SUPERMAN — Planification UI/UX et features. Département: UI/UX. Modèle: anthropic/claude-sonnet-5-20260630 (élite, plans one-shot)"
+description: "SUPERMAN — Planification UI/UX et features. Département: UI/UX. Modèle: anthropic/claude-sonnet-5 (élite, plans one-shot)"
 ---
 
 # SUPERMAN — Agent de Planification UI/UX

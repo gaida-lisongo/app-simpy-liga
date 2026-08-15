@@ -3,59 +3,39 @@
 > Relais entre SUPERMAN et BUILDER.
 > SUPERMAN écrit le plan. BUILDER lit et exécute. Écrasé à chaque nouveau plan.
 
-## Plan BUILDER — Correction saveCampagne() écriture clés :meta et :tirages — 2026-08-15
+## ⚠️ Piège critique corrigé — 2026-08-15 — LIRE avant toute session UI/réseau
 
-**Objectif** : `saveCampagne()` dans `redis.js` n'écrit que le payload complet + LPUSH/LTRIM. Elle n'écrit PAS les clés `:meta` et `:tirages`. Résultat : `getRecentCampaigns()` ne trouve pas les `:meta` → fallback lent et inefficace.
+**Ne JAMAIS créer/modifier un wrapper `fetch()` (ex. `apiFetch()`,
+`api-proxy/+server.js`) sans grep TOUS ses appelants d'abord**
+(`grep -rn "nomFonction(" frontend/src/`). Un bug de déstructuration dans
+`frontend/src/lib/server/api.js::apiFetch()` (elle lisait `init.json` alors
+que le seul appelant réel envoyait `init.body`) a fait que **le corps de
+CHAQUE requête POST passant par `/api-proxy/*` était silencieusement
+remplacé par `undefined`**, et cela pendant plusieurs sessions sans qu'aucune
+erreur ne se déclenche : le backend a un fallback "corps vide = config
+catalogue par défaut" (`circuits.py::run()`), donc chaque requête réussissait
+en 200 OK avec des résultats plausibles mais toujours identiques (N=10000,
+seed=42, paramètres par défaut) — quel que soit ce que l'utilisatrice
+configurait dans le drawer de simulation.
 
-**Sprint** : Sprint 2 — Circuit Solaire (finitions)
-**Agent** : BUILDER
+**Symptôme qui doit immédiatement faire suspecter ce pattern** : une action
+utilisateur (formulaire, réglage) semble n'avoir AUCUN effet sur le résultat,
+alors que le composant qui la capture est syntaxiquement correct — chercher
+une couche réseau intermédiaire (proxy, wrapper fetch) qui droppe ou
+transforme le corps AVANT de blâmer le composant Svelte lui-même.
 
----
+**Détail complet** : `memory-bank/feature/journal/2026-08-15.md`, section
+"Correction critique — apiFetch() supprimait le corps de TOUTES les requêtes
+POST". Règle générale ajoutée à `memory-bank/shared/systemPatterns.md`.
 
-### Fichier concerné
-
-- `frontend/src/lib/server/redis.js` — fonction `saveCampagne()`
-
----
-
-### Étapes BUILDER
-
-- [x] **1.** Lire la fonction `saveCampagne()` actuelle dans `redis.js`
-- [x] **2.** Modifier `saveCampagne()` pour écrire les 3 clés : payload complet, `:meta`, `:tirages`
-- [x] **3.** Vérification : `npm run build` depuis `/frontend`
-
----
-
-### Modifications apportées
-
-Dans `saveCampagne()` :
-1. **Payload complet** (inchangé) : `redis.set(key, response)` — toujours dans le `Promise.all`
-2. **Nouveau** : `redis.set(metaKey, JSON.stringify(meta))` — métadonnées légères (campagne_id, circuit, N_iterations, echantillonnage, COP, STR)
-3. **Nouveau** : `redis.set(tiragesKey, JSON.stringify(tirages))` — tirages bruts
-4. **Historique** (inchangé) : `redis.lpush(hist, id)` + `redis.ltrim(hist, 0, 19)`
-
-Toutes les écritures sont parallélisées dans un seul `Promise.all`.
+**Fichier corrigé** : `frontend/src/lib/server/api.js::apiFetch()` — corps lu
+depuis `init.body` (chaîne déjà sérialisée par l'appelant), plus `init.json`
+inexistant côté appelant réel.
 
 ---
 
-### Critère d'acceptation
+## Contexte antérieur (clos)
 
-1. `saveCampagne()` écrit les clés `simpy:campagne:{id}:meta` et `simpy:campagne:{id}:tirages`
-2. `getRecentCampaigns()` trouve les `:meta` sans fallback
-3. `npm run build` passe sans erreur
-4. Aucune régression sur `getCampagne()`, `getRecentCampaigns()`, `clearCircuit()`
-
----
-
-### Pièges évités
-
-- ✅ Le payload complet `redis.set(key, response)` est conservé
-- ✅ `getRecentCampaigns()` et `getCampagne()` non modifiés
-- ✅ `clearCircuit()` déjà compatible (lignes 174-175 suppriment `:meta` et `:tirages`)
-
----
-
-### Observations en passage
-
-- `clearCircuit()` (lignes 169-180) supprime déjà les clés `:meta` et `:tirages` — aucune modification nécessaire
-- Le format du `meta` correspond exactement à ce que `getRecentCampaigns()` attend dans sa branche `:meta` (lignes 99-108)
+Dernier plan actif : correction `saveCampagne()` — écriture des clés `:meta`
+et `:tirages` (2026-08-15, toutes étapes `[x]`, voir
+`memory-bank/feature/journal/2026-08-15.md` section précédente).

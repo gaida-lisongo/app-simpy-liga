@@ -20,15 +20,16 @@ function url(path) {
  * @param {RequestInit & { json?: any }} [init]
  */
 export async function apiFetch(path, init = {}) {
-	const { json: body, headers, ...rest } = init;
+	const { json, headers, body, ...rest } = init;
 	const finalHeaders = new Headers(headers);
 	finalHeaders.set('x-internal-token', INTERNAL_API_TOKEN);
-	if (body !== undefined) finalHeaders.set('content-type', 'application/json');
+	const finalBody = json !== undefined ? JSON.stringify(json) : body;
+	if (finalBody !== undefined) finalHeaders.set('content-type', 'application/json');
 
 	const res = await fetch(url(`/api${path}`), {
 		...rest,
 		headers: finalHeaders,
-		body: body !== undefined ? JSON.stringify(body) : undefined,
+		body: finalBody,
 		cache: 'no-store'
 	});
 

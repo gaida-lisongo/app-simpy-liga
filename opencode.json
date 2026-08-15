@@ -8,7 +8,8 @@
       "frontend/.opencode/skills"
     ]
   },
-  "maxContextTokens": 40000,
+  "enabled_providers": ["openrouter"],
+  "default_agent": "status",
   "command": {
     "plan-science": {
       "template": "Analyse cette anomalie ou feature backend et produis le plan dans memory-bank/science/activeContext.md : $ARGUMENTS",
@@ -41,7 +42,7 @@
   "agent": {
     "superman": {
       "mode": "primary",
-      "model": "openrouter/anthropic/claude-sonnet-5-20260630",
+      "model": "openrouter/anthropic/claude-sonnet-5",
       "temperature": 0.2,
       "prompt": "{file:./.opencode/agents/superman.md}",
       "permission": {
@@ -53,7 +54,7 @@
     },
     "builder": {
       "mode": "subagent",
-      "model": "openrouter/deepseek/deepseek-v4-flash-0731-20260731",
+      "model": "openrouter/deepseek/deepseek-v4-flash-0731",
       "temperature": 0.1,
       "prompt": "{file:./.opencode/agents/builder.md}",
       "permission": {
@@ -64,7 +65,7 @@
     },
     "einstein": {
       "mode": "primary",
-      "model": "openrouter/openai/gpt-5.6-sol-pro-20260709",
+      "model": "openrouter/openai/gpt-5.6-sol-pro",
       "temperature": 0.1,
       "options": {
         "reasoning": { "effort": "high" }
@@ -78,7 +79,7 @@
     },
     "patcher": {
       "mode": "subagent",
-      "model": "openrouter/deepseek/deepseek-v4-pro-20260813",
+      "model": "openrouter/deepseek/deepseek-v4-pro-0813",
       "temperature": 0.1,
       "prompt": "{file:./.opencode/agents/patcher.md}",
       "permission": {
@@ -89,7 +90,7 @@
     },
     "sheerlock": {
       "mode": "primary",
-      "model": "openrouter/anthropic/claude-sonnet-5-20260630",
+      "model": "openrouter/anthropic/claude-sonnet-5",
       "temperature": 0.3,
       "prompt": "{file:./.opencode/agents/sheerlock.md}",
       "permission": {
@@ -101,7 +102,7 @@
     },
     "sentinel": {
       "mode": "subagent",
-      "model": "openrouter/deepseek/deepseek-v4-pro-20260813",
+      "model": "openrouter/deepseek/deepseek-v4-pro-0813",
       "temperature": 0.1,
       "prompt": "{file:./.opencode/agents/sentinel.md}",
       "permission": {
@@ -112,7 +113,7 @@
     },
     "status": {
       "mode": "primary",
-      "model": "openrouter/google/gemini-3.7-flash-20260813",
+      "model": "openrouter/google/gemini-3.7-flash",
       "temperature": 0.0,
       "prompt": "{file:./.opencode/agents/status.md}",
       "permission": {
@@ -123,5 +124,5 @@
       "description": "Rapport d'avancement — lecture seule progress.md"
     }
   },
-  "defaultAgent": "status"
+  "default_agent": "status"
 }

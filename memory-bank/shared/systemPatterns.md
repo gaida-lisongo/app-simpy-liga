@@ -72,6 +72,19 @@ app-simpy-liga/
 6. `cop_ref` dans `compute_courbes_cpc` = `None` si cycle invalide (jamais `0.35`)
 7. Upstash Redis côté frontend — jamais SQLite / localStorage
 8. Plotly.js uniquement — jamais recharts / chart.js / SVG statique
+9. Tout wrapper `fetch()` (proxy, façade API) doit lire la clé EXACTE utilisée
+   par ses appelants réels — grep TOUS les appelants avant de modifier la
+   signature d'un wrapper (`grep -rn "nomFonction(" frontend/src/`). Bug
+   vécu 2026-08-15 : `apiFetch()` lisait `init.json` alors que son seul
+   appelant (`api-proxy/+server.js`) envoyait `init.body` → corps de CHAQUE
+   requête POST silencieusement remplacé par `undefined`, aucune erreur
+   (le backend a un fallback "corps vide = config par défaut"), donc chaque
+   campagne lancée depuis l'UI tournait avec les valeurs catalogue par
+   défaut quels que soient les réglages utilisateur. Détail complet :
+   `memory-bank/feature/journal/2026-08-15.md`.
+10. Symptôme "le réglage utilisateur n'a aucun effet mais rien n'erreure" →
+    suspecter une couche réseau intermédiaire (wrapper fetch, proxy) qui
+    droppe/transforme le corps, PAS le composant Svelte en premier lieu.
 
 ## Valeurs de référence campagne camp_20260813T161420Z (N=10 000, seed=42)
 

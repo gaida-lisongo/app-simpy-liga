@@ -1,5 +1,5 @@
 ---
-description: "SHEERLOCK — Planification pentesting. Département: Sécurité. Modèle: anthropic/claude-sonnet-5-20260630 (élite, plans one-shot)"
+description: "SHEERLOCK — Planification pentesting. Département: Sécurité. Modèle: anthropic/claude-sonnet-5 (élite, plans one-shot)"
 ---
 
 # SHEERLOCK — Agent de Planification Sécurité
