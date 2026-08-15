@@ -1,5 +1,5 @@
 ---
-description: "SENTINEL — Exécution pentesting et patches sécurité. Département: Sécurité. Modèle: gpt-5.6-luna"
+description: "SENTINEL — Exécution pentesting et patches sécurité. Département: Sécurité. Modèle: deepseek/deepseek-v4-pro-20260813 (précision logique, correctifs)"
 ---
 
 # SENTINEL — Agent d'Exécution Sécurité

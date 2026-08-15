@@ -41,19 +41,19 @@
   "agent": {
     "superman": {
       "mode": "primary",
-      "model": "openrouter/minimax/minimax-m2.7",
+      "model": "openrouter/anthropic/claude-sonnet-5-20260630",
       "temperature": 0.2,
       "prompt": "{file:./.opencode/agents/superman.md}",
       "permission": {
         "edit": "deny",
-        "bash": "ask",
+        "bash": "deny",
         "webfetch": "allow"
       },
-      "description": "UI/UX — Planification features et corrections interface"
+      "description": "UI/UX — Planification features et corrections interface (élite, one-shot)"
     },
     "builder": {
       "mode": "subagent",
-      "model": "openrouter/deepseek/deepseek-v4-flash",
+      "model": "openrouter/deepseek/deepseek-v4-flash-0731-20260731",
       "temperature": 0.1,
       "prompt": "{file:./.opencode/agents/builder.md}",
       "permission": {
@@ -64,18 +64,21 @@
     },
     "einstein": {
       "mode": "primary",
-      "model": "openrouter/deepseek/deepseek-v4-pro",
+      "model": "openrouter/openai/gpt-5.6-sol-pro-20260709",
       "temperature": 0.1,
+      "options": {
+        "reasoning": { "effort": "high" }
+      },
       "prompt": "{file:./.opencode/agents/einstein.md}",
       "permission": {
         "edit": "deny",
-        "bash": "ask"
+        "bash": "deny"
       },
-      "description": "Science — Planification corrections thermodynamiques backend"
+      "description": "Science — Planification corrections thermodynamiques backend (élite, reasoning high)"
     },
     "patcher": {
       "mode": "subagent",
-      "model": "openrouter/qwen/qwen3.6-plus",
+      "model": "openrouter/deepseek/deepseek-v4-pro-20260813",
       "temperature": 0.1,
       "prompt": "{file:./.opencode/agents/patcher.md}",
       "permission": {
@@ -86,19 +89,19 @@
     },
     "sheerlock": {
       "mode": "primary",
-      "model": "openrouter/z-ai/glm-5.1",
+      "model": "openrouter/anthropic/claude-sonnet-5-20260630",
       "temperature": 0.3,
       "prompt": "{file:./.opencode/agents/sheerlock.md}",
       "permission": {
         "edit": "deny",
-        "bash": "ask",
+        "bash": "deny",
         "webfetch": "allow"
       },
-      "description": "Sécurité — Planification et orchestration pentesting"
+      "description": "Sécurité — Planification et orchestration pentesting (élite, one-shot)"
     },
     "sentinel": {
       "mode": "subagent",
-      "model": "openrouter/openai/gpt-5.6-luna",
+      "model": "openrouter/deepseek/deepseek-v4-pro-20260813",
       "temperature": 0.1,
       "prompt": "{file:./.opencode/agents/sentinel.md}",
       "permission": {
@@ -109,7 +112,7 @@
     },
     "status": {
       "mode": "primary",
-      "model": "openrouter/xiaomi/mimo-v2.5",
+      "model": "openrouter/google/gemini-3.7-flash-20260813",
       "temperature": 0.0,
       "prompt": "{file:./.opencode/agents/status.md}",
       "permission": {

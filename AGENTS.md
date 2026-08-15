@@ -5,22 +5,68 @@ Les sorties alimentent des articles scientifiques. Une erreur silencieuse = un r
 
 ---
 
-## Organisation en 3 départements
+## Organisation en 3 départements + Orchestration
 
-| Département | Agents | Modèles | Rôle |
+Chaque département est un binôme **Primary (planificateur, `mode: primary`,
+`edit: deny`, `bash: deny`)** → **Subagent (exécuteur, `mode: subagent`,
+`edit: allow`, `bash: allow`)**. Le planificateur ne touche **jamais** au code,
+ni via l'outil d'édition (bloqué techniquement) ni via `bash` (bloqué
+techniquement aussi — pas de contournement possible par `echo >`, `sed -i`, etc.).
+Il écrit un plan dans `memory-bank/{dept}/activeContext.md` que l'exécuteur lit et
+applique dans une session séparée. **Tous les Primary sont concernés, pas
+seulement STATUS** — voir Protocole de délégation ci-dessous.
+
+> ⚠️ **Ce tableau est un résumé.** `opencode.json` (racine du repo) est la seule
+> source de vérité pour les model-id exacts, les permissions et les modes — en cas
+> de doute, relire `opencode.json`, pas ce fichier.
+
+| Département | Primary (planifie) | Subagent (exécute) | Rôle |
 |---|---|---|---|
-| **UI/UX** | SUPERMAN (primary) + BUILDER (primary) | qwen-3.8-max + deepseek-v4-flash | Features et corrections interface |
-| **Science** | EINSTEIN (primary) + PATCHER (primary) | claude-sonnet-4-7 + qwen-3.7-plus | Corrections thermodynamiques backend |
-| **Sécurité** | SHEERLOCK (primary) + SENTINEL (subagent) | glm-5.2 + deepseek-v4-pro | Audit et patches sécurité |
-| **Transversal** | STATUS | mimo-v2.5 | Passerelle & Orchestrateur — informe, évalue les prompts, améliore, transmet aux primaires, fait le rapport. JAMAIS de code. |
+| **UI/UX** | SUPERMAN — `anthropic/claude-sonnet-5-20260630` | BUILDER — `deepseek/deepseek-v4-flash-0731-20260731` | Features et corrections interface |
+| **Science** | EINSTEIN — `openai/gpt-5.6-sol-pro-20260709` (reasoning=high) | PATCHER — `deepseek/deepseek-v4-pro-20260813` | Corrections thermodynamiques backend |
+| **Sécurité** | SHEERLOCK — `anthropic/claude-sonnet-5-20260630` | SENTINEL — `deepseek/deepseek-v4-pro-20260813` | Audit et patches sécurité |
+| **Transversal** | STATUS — `google/gemini-3.7-flash-20260813` | — | Passerelle & Orchestrateur — informe, évalue les prompts, améliore, transmet aux primaires, fait le rapport. JAMAIS de code. |
 
+Tous les modèles ci-dessus sont accédés via le provider `openrouter` (voir
+`opencode.json`). Les planificateurs (SUPERMAN, EINSTEIN, SHEERLOCK) utilisent des
+modèles haut de gamme pour produire des plans complets dès la première tentative
+("one-shot") — un plan flou coûte plus cher en itérations de correctif chez
+l'exécuteur qu'un modèle plus capable en amont. Les exécuteurs (BUILDER, PATCHER,
+SENTINEL) utilisent des modèles rapides/économiques une fois le plan cadré avec
+précision — sauf PATCHER/SENTINEL qui reçoivent le modèle DeepSeek "pro" (et non
+"flash") car leur exécution (physique, sécurité) demande plus de rigueur logique
+que l'implémentation UI de BUILDER.
+
+### Protocole de délégation (TOUS les Primary : SUPERMAN, EINSTEIN, SHEERLOCK, STATUS)
+
+Ce protocole existait déjà pour STATUS ; il s'applique désormais identiquement aux
+3 planificateurs de département.
+
+```
+Si l'utilisateur demande une édition/implémentation directe
+("corrige X", "ajoute Y", "applique le patch Z") :
+
+1. NE JAMAIS tenter d'éditer ou d'exécuter bash pour le faire (de toute façon
+   edit: deny et bash: deny bloquent techniquement l'agent — mais l'agent ne
+   doit même pas essayer de contourner).
+2. TOUJOURS répondre explicitement que cela dépasse le rôle de planification.
+3. TOUJOURS proposer un plan concret + désigner l'exécuteur pertinent
+   (SUPERMAN→BUILDER, EINSTEIN→PATCHER, SHEERLOCK→SENTINEL).
+4. TOUJOURS terminer par une question de validation explicite
+   ("Valides-tu ce plan pour que je le transmette à [EXÉCUTEUR] ?").
+5. NE JAMAIS transmettre à l'exécuteur sans validation explicite de l'utilisateur.
+```
+
+Raison : un plan flou + une édition non validée = boucle de correctifs coûteuse
+chez l'exécuteur, et une édition accidentelle par un Primary = coût direct non
+souhaité pour l'utilisateur.
 
 ### Transversal — Protocole STATUS
 
 ```
 STATUS reçoit  → requête utilisateur
               → évalue le prompt (clarté, complétude)
-              → identifie l'agent primaire (EINSTEIN / SUPERMAN / SHERLOCK)
+              → identifie l'agent primaire (EINSTEIN / SUPERMAN / SHEERLOCK)
               → améliore le prompt
               → transmet via task(subagent_type=primaire)
               → reçoit le résultat
@@ -29,7 +75,6 @@ STATUS reçoit  → requête utilisateur
 STATUS contacte UNIQUEMENT : einstein, superman, sheerlock
 STATUS ne contacte JAMAIS   : patcher, builder, sentinel, explore, general
 ```
-
 
 ---
 

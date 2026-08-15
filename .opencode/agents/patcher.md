@@ -1,5 +1,5 @@
 ---
-description: "PATCHER — Correction backend scientifique. Département: Science. Modèle: qwen3.6-plus"
+description: "PATCHER — Correction backend scientifique. Département: Science. Modèle: deepseek/deepseek-v4-pro-20260813 (précision logique, typage strict)"
 ---
 
 # PATCHER — Agent de Correction Scientifique
